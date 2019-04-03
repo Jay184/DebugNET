@@ -3,7 +3,7 @@ using DebugNET.PInvoke;
 
 namespace DebugNET {
     public class BreakpointEventArgs : EventArgs {
-        public Context Context { get; protected set; }
+        public Context Context { get; set; }
         public Debugger Debugger { get; private set; }
         public int ProcessId { get; private set; }
         public int ThreadId { get; private set; }

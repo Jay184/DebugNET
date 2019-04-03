@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using DebugNET.PInvoke;
 
 namespace DebugNETExample {
     static class Program {
@@ -11,12 +12,20 @@ namespace DebugNETExample {
         /// </summary>
         [STAThread]
         static void Main() {
-            const string name = "bhd";
+            const string name = "DebugeeProgram";
             DebugNET.Debugger debugger = new DebugNET.Debugger(name);
-            debugger.SetBreakpoint("\"bhd.exe\"+31666");
+            debugger.SetBreakpoint("\"DebugeeProgram.exe\"+13BD8");
 
-            debugger.ListenToBreakpoints().RunSynchronously();
+            debugger.BreakpointHit += (sender, e) => {
+                Context c = e.Context;
 
+                Console.WriteLine(c.Eax);
+
+                c.Eax *= 2;
+                e.Context = c;
+            };
+
+            debugger.ListenToBreakpoints();
             //debugger.WriteInt32((IntPtr)0x010FF448, 20);
 
             //Application.EnableVisualStyles();

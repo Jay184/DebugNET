@@ -76,52 +76,51 @@ namespace DebugNET {
             return breakpoint.Enable() && breakpoints.Add(breakpoint);
         }
 
-        public async Task ListenToBreakpoints() {
-            CancellationTokenSource tokenSource = new CancellationTokenSource();
+        public void ListenToBreakpoints() {
 
-            await Task.Run(() => {
-                Breakpoint lastBreakpoint = null;
-                Attach();
+            Breakpoint lastBreakpoint = null;
+            Attach();
 
-                while (Attached) {
-                    if (tokenSource.IsCancellationRequested) break;
-
-                    // Wait for debuggee's debug event, timeout = 5 minutes
-                    DebugEvent debugEvent = new DebugEvent();
-                    bool success = Kernel32.WaitForDebugEvent(ref debugEvent, 300);
+            while (Attached) {
+                // Wait for debuggee's debug event, timeout = 5 minutes
+                DebugEvent debugEvent = new DebugEvent();
+                bool success = Kernel32.WaitForDebugEvent(ref debugEvent, 300);
 
 
-                    if (success) {
-                        uint errorCode = debugEvent.Exception.ExceptionRecord.Code;
-                        IntPtr errorAddress = debugEvent.Exception.ExceptionRecord.Address;
-                        Breakpoint breakpoint = Breakpoints.SingleOrDefault(bp => bp.Address == errorAddress);
+                if (success) {
+                    uint errorCode = debugEvent.Exception.ExceptionRecord.Code;
+                    IntPtr errorAddress = debugEvent.Exception.ExceptionRecord.Address;
+                    Breakpoint breakpoint = Breakpoints.SingleOrDefault(bp => bp.Address == errorAddress);
 
-                        if (breakpoint != null && breakpoint.Enabled && errorCode == EXCEPTION_INT_3) {
-                            ThreadAccess access = ThreadAccess.GET_CONTEXT | ThreadAccess.SET_CONTEXT;
-                            Context context = new Context() { ContextFlags = ContextFlags.CONTEXT_CONTROL };
+                    if (breakpoint != null && breakpoint.Enabled && errorCode == EXCEPTION_INT_3) {
+                        ThreadAccess access = ThreadAccess.GET_CONTEXT | ThreadAccess.SET_CONTEXT;
+                        Context context = new Context() { ContextFlags = ContextFlags.CONTEXT_CONTROL | ContextFlags.CONTEXT_INTEGER };
 
-                            IntPtr threadHandle = Kernel32.OpenThread(access, false, debugEvent.ThreadId);
-                            if (threadHandle == IntPtr.Zero) throw new InvalidOperationException("Can't open thread");
+                        IntPtr threadHandle = Kernel32.OpenThread(access, false, debugEvent.ThreadId);
+                        if (threadHandle == IntPtr.Zero) throw new InvalidOperationException("Can't open thread");
 
-                            Kernel32.GetThreadContext(threadHandle, ref context);
+                        Kernel32.GetThreadContext(threadHandle, ref context);
 
-                            context.Eip = (uint)errorAddress;
-                            context.EFlags |= 0x100; // Single step instruction
+                        BreakpointEventArgs eventArgs = new BreakpointEventArgs(this, context, debugEvent);
+                        BreakpointHit?.Invoke(this, eventArgs);
 
-                            Kernel32.SetThreadContext(threadHandle, ref context);
-                            Kernel32.CloseHandle(threadHandle);
+                        Context newContext = eventArgs.Context;
+                        newContext.Eip = (uint)errorAddress;
+                        newContext.EFlags |= 0x100; // Single step instruction
+
+                        Kernel32.SetThreadContext(threadHandle, ref newContext);
+                        Kernel32.CloseHandle(threadHandle);
 
 
-                            lastBreakpoint = breakpoint;
-                            breakpoint.Disable();
-                        } else if (lastBreakpoint != null && errorCode == EXCEPTION_SINGLE_STEP) {
-                            lastBreakpoint.Enable();
-                        }
+                        lastBreakpoint = breakpoint;
+                        breakpoint.Disable();
+                    } else if (lastBreakpoint != null && errorCode == EXCEPTION_SINGLE_STEP) {
+                        lastBreakpoint.Enable();
                     }
-
-                    Kernel32.ContinueDebugEvent(debugEvent.ProcessId, debugEvent.ThreadId, ContinueStatus.DBG_CONTINUE);
                 }
-            }, tokenSource.Token);
+
+                Kernel32.ContinueDebugEvent(debugEvent.ProcessId, debugEvent.ThreadId, ContinueStatus.DBG_CONTINUE);
+            }
         }
 
         #region IDisposable
@@ -222,7 +221,7 @@ namespace DebugNET {
                 sign = matches[0].Value[0];
                 offsetString = matches[0].Groups[2].ToString();
 
-                if (sign == '-') baseAddress = (IntPtr)(-Convert.ToInt32(offsetString, 16));
+                if (sign == '-') baseAddress = (IntPtr)( -Convert.ToInt32(offsetString, 16) );
                 else baseAddress = (IntPtr)Convert.ToInt32(offsetString, 16);
             }
 

@@ -79,5 +79,11 @@
   <ItemGroup>
     <None Include="App.config" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DebugNET\DebugNET.csproj">
+      <Project>{5f42b0a7-d996-4117-bdf7-7b7d7a4dce82}</Project>
+      <Name>DebugNET</Name>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
