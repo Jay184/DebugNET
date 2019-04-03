@@ -15,8 +15,6 @@ namespace DebugNET {
         protected const uint EXCEPTION_INT_3 = 0x80000003;
         protected const uint EXCEPTION_SINGLE_STEP = 0x80000004;
 
-        public event EventHandler<BreakpointEventArgs> BreakpointHit;
-
 
         public Process Process { get; private set; }
         protected IntPtr ProcessHandle { get; private set; }
@@ -67,13 +65,18 @@ namespace DebugNET {
             return !Attached;
         }
 
-        public bool SetBreakpoint(string address) {
+        public Breakpoint SetBreakpoint(string address) {
             IntPtr addrPtr = GetAddress(address);
             return SetBreakpoint(addrPtr);
         }
-        public bool SetBreakpoint(IntPtr address) {
+        public Breakpoint SetBreakpoint(IntPtr address) {
             Breakpoint breakpoint = new Breakpoint(this, address);
-            return breakpoint.Enable() && breakpoints.Add(breakpoint);
+
+            if (breakpoint.Enable() && breakpoints.Add(breakpoint)) {
+                return breakpoint;
+            }
+
+            return null;
         }
 
         public void ListenToBreakpoints() {
@@ -101,8 +104,8 @@ namespace DebugNET {
 
                         Kernel32.GetThreadContext(threadHandle, ref context);
 
-                        BreakpointEventArgs eventArgs = new BreakpointEventArgs(this, context, debugEvent);
-                        BreakpointHit?.Invoke(this, eventArgs);
+                        BreakpointEventArgs eventArgs = new BreakpointEventArgs(context, debugEvent, breakpoint);
+                        breakpoint.OnHit(eventArgs);
 
                         Context newContext = eventArgs.Context;
                         newContext.Eip = (uint)errorAddress;
