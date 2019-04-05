@@ -235,6 +235,47 @@ namespace DebugNET {
             return address;
         }
 
+        public IntPtr Seek(string moduleName, params byte[] data) {
+            if (string.IsNullOrEmpty(moduleName)) throw new ArgumentNullException("moduleName");
+            else if (data == null) throw new ArgumentNullException("data");
+            else if (data.Length == 0) throw new ArgumentException("Empty data");
+
+
+            ProcessModule module = FindModule(moduleName);
+            if (module == null) return IntPtr.Zero;
+
+            IntPtr address = module.BaseAddress;
+
+
+            for (int i = 0; i < module.ModuleMemorySize; i++) {
+                byte b = ReadByte(address);
+
+                // Check if first byte is equal
+                if (b == data[0]) {
+                    // Return if only one byte long
+                    if (data.Length == 1) return address;
+
+                    // Check if data is in the module's memory
+                    if (i + data.Length >= module.ModuleMemorySize) return IntPtr.Zero;
+
+                    IntPtr firstAddress = address;
+                    // Read following N bytes and compare
+                    for (int j = 1; j < data.Length; j++) {
+                        firstAddress = IntPtr.Add(firstAddress, 1);
+
+                        if (data[j] == ReadByte(firstAddress)) {
+                            if (j + 1 == data.Length) return address;
+
+                        } else break;
+                    }
+                }
+
+                address = IntPtr.Add(address, 1);
+            }
+
+            return IntPtr.Zero;
+        }
+
         protected ProcessModule FindModule(string name) {
             if (string.IsNullOrEmpty(name)) throw new ArgumentNullException("name");
 
@@ -261,7 +302,7 @@ namespace DebugNET {
                 sign = matches[0].Value[0];
                 offsetString = matches[0].Groups[2].ToString();
 
-                if (sign == '-') baseAddress = (IntPtr)( -Convert.ToInt32(offsetString, 16) );
+                if (sign == '-') baseAddress = (IntPtr)(-Convert.ToInt32(offsetString, 16));
                 else baseAddress = (IntPtr)Convert.ToInt32(offsetString, 16);
             }
 

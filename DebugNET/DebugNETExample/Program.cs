@@ -14,16 +14,16 @@ namespace DebugNETExample {
 
             try {
                 Debugger debugger = new Debugger(name);
-                Breakpoint breakpoint = debugger.SetBreakpoint("\"DebugeeProgram.exe\"+13BD8");
+
+                IntPtr addr = debugger.Seek("DebugeeProgram.exe", 0x89, 0x45, 0xD0); // DebugeeProgram.exe+13BD8
+                Breakpoint breakpoint = debugger.SetBreakpoint(addr);
+
 
                 if (breakpoint != null) {
-                    int i = 0;
-
                     breakpoint.Hit += (sender, e) => {
-                        Context c = e.Context;
                         Debugger dbg = (Debugger)sender;
 
-                        Console.Write($"> Received { c.Eax } @ { e.Address }\r\n> Enter number: ");
+                        Console.Write($"> Received { e.Context.Eax } @ { e.Address.ToString("X8") }\r\n> Enter number: ");
 
                         string input = Console.ReadLine();
 
@@ -33,8 +33,12 @@ namespace DebugNETExample {
                         }
 
                         if (uint.TryParse(input, out uint newValue)) {
-                            //debugger.WriteUInt32((IntPtr)xxx, newValue);
+                            IntPtr variableAddress = (IntPtr)(e.Context.Edx + 0x128);
+                            debugger.WriteUInt32(variableAddress, newValue);
+
+                            Context c = e.Context;
                             c.Eax = newValue;
+                            e.Context = c;
                         }
                     };
                 }
