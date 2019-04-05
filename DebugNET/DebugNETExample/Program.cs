@@ -11,11 +11,12 @@ namespace DebugNETExample {
         /// </summary>
         [STAThread]
         static void Main() {
-            const string name = "bhd";
+            const string name = "DebugeeProgram";
             DebugNET.Debugger debugger = new DebugNET.Debugger(name);
-            debugger.SetBreakpoint("\"bhd.exe\"+31666");
+            debugger.SetBreakpoint("\"DebugeeProgram.exe\"+0");
 
-            debugger.ListenToBreakpoints().RunSynchronously();
+            debugger.ListenToBreakpoints();
+            Console.ReadLine();
 
             //debugger.WriteInt32((IntPtr)0x010FF448, 20);
 
