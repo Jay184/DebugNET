@@ -5,6 +5,7 @@ namespace DebugNET {
     public class BreakpointEventArgs : EventArgs {
         public Context Context { get; set; }
         public IntPtr Address { get; set; }
+        public bool Disable { get; set; }
         //public Debugger Debugger { get; private set; }
         public int ProcessId { get; private set; }
         public int ThreadId { get; private set; }
