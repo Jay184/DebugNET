@@ -23,20 +23,20 @@ namespace DebugNETExample {
             RefreshProcesses();
         }
         private void btnAttach_Click(object sender, EventArgs e) {
-            if (Debugger == null || !Debugger.Attached) {
+            //if (Debugger == null || !Debugger.Attached) {
 
-                if (listProcesses.SelectedIndex == -1) return;
+            //    if (listProcesses.SelectedIndex == -1) return;
 
-                Debugger = new DebugNET.Debugger(listProcesses.SelectedItem.ToString());
-                if (Debugger.Attach()) {
-                    ( (Button)sender ).Text = "Detach";
-                }
+            //    Debugger = new DebugNET.Debugger(listProcesses.SelectedItem.ToString());
+            //    //if (Debugger.Attach()) {
+            //    //    ( (Button)sender ).Text = "Detach";
+            //    //}
 
-            } else if (Debugger.Detach()) {
+            //} else if (Debugger.Detach()) {
 
-                ( (Button)sender ).Text = "Attach";
+            //    ( (Button)sender ).Text = "Attach";
 
-            }
+            //}
         }
 
         private void RefreshProcesses() {

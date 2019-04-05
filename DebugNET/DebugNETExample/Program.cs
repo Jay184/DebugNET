@@ -23,23 +23,36 @@ namespace DebugNETExample {
                 if (breakpoint != null) {
                     breakpoint.Hit += (sender, e) => {
                         Context c = e.Context;
+                        Console.WriteLine($"> Received { c.Eax } @ { e.Address }\r\n> Enter number:");
 
-                        Console.WriteLine(c.Eax);
+                        //string input = Console.ReadLine();
 
-                        c.Eax *= 2;
+                        //if (input.Equals("quit")) {
+                        //    Debugger dbg = (Debugger)sender;
+
+                        //    if (dbg.TokenSource != null) dbg.TokenSource.Cancel();
+                        //    return;
+                        //}
+
+                        //if (uint.TryParse(input, out uint newValue)) {
+                        //    c.Eax = newValue;
+                        //}
+
+                        Debugger dbg = (Debugger)sender;
+                        dbg.TokenSource.Cancel();
+                        c.Eax = 0;
+
                         e.Context = c;
                     };
                 }
 
-                CancellationTokenSource tokenSource;
-                Task t = debugger.ListenToBreakpoints(out tokenSource);
-                tokenSource.CancelAfter(5000);
+                Task t = debugger.Listen(out _);
                 t.Wait();
-                ;
+
             } catch (ProcessNotFoundException ex) {
                 Console.WriteLine(ex.Message);
             }
-            
+
             //debugger.WriteInt32((IntPtr)0x010FF448, 20);
 
             //Application.EnableVisualStyles();

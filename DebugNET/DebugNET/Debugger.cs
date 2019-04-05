@@ -19,11 +19,20 @@ namespace DebugNET {
         public Process Process { get; private set; }
         protected IntPtr ProcessHandle { get; private set; }
 
-        public bool Attached { get; private set; }
+        public CancellationTokenSource TokenSource { get; private set; }
+        protected Task ListenerTask { get; private set; }
+
+        public bool Attached {
+            get { return attached; }
+            private set { attached = value; }
+        }
+        public bool Listening { get; private set; }
 
         public Breakpoint[] Breakpoints => breakpoints.ToArray();
         private HashSet<Breakpoint> breakpoints;
 
+        [ThreadStatic]
+        private bool attached;
         private bool isDisposed;
 
 
@@ -50,18 +59,25 @@ namespace DebugNET {
 
 
 
-        public bool Attach() {
-            if (Attached) return false;
+        //public bool Attach() {
+        //    if (Attached) return false;
 
-            Attached = Kernel32.DebugActiveProcess(Process.Id);
-            return Attached;
-        }
-        public bool Detach() {
-            if (!Attached) return false;
+        //    Attached = Kernel32.DebugActiveProcess(Process.Id);
+        //    return Attached;
+        //}
+        //public bool Detach() {
+        //    if (!Attached) return false;
 
-            Attached = Kernel32.DebugActiveProcessStop(Process.Id);
-            return !Attached;
-        }
+        //    if (ListenerTask != null) {
+        //        if (ListenerTokenSource != null) ListenerTokenSource.Cancel(true);
+
+        //        ListenerTask.Wait();
+        //        Attached = Kernel32.DebugActiveProcessStop(Process.Id);
+        //    }
+
+        //    Attached = Kernel32.DebugActiveProcessStop(Process.Id);
+        //    return !Attached;
+        //}
 
         public Breakpoint SetBreakpoint(string address) {
             IntPtr addrPtr = GetAddress(address);
@@ -84,68 +100,29 @@ namespace DebugNET {
             }
         }
 
-        public Task ListenToBreakpoints(out CancellationTokenSource tokenSource) {
-            tokenSource = new CancellationTokenSource();
-            CancellationToken token = tokenSource.Token;
+        public Task Listen(out CancellationTokenSource tokenSource) {
+            if (Listening) throw new InvalidOperationException("Debugger already listening");
 
-            Task t = new Task(() => Listen(token), token, TaskCreationOptions.LongRunning);
-            t.Start();
+            TokenSource = new CancellationTokenSource();
 
-            return t;
+            tokenSource = TokenSource;
+            CancellationToken token = TokenSource.Token;
 
-            Breakpoint lastBreakpoint = null;
-            Attach();
+            ListenerTask = new Task(() => Listen(token), token, TaskCreationOptions.LongRunning);
+            ListenerTask.Start();
+            Listening = true;
 
-            while (Attached) {
-                // Wait for debuggee's debug event, timeout = 5 minutes
-                DebugEvent debugEvent = new DebugEvent();
-                bool success = Kernel32.WaitForDebugEvent(ref debugEvent, 300);
-
-
-                if (success) {
-                    uint errorCode = debugEvent.Exception.ExceptionRecord.Code;
-                    IntPtr errorAddress = debugEvent.Exception.ExceptionRecord.Address;
-                    Breakpoint breakpoint = breakpoints.SingleOrDefault(bp => bp.Address == errorAddress);
-
-                    if (breakpoint != null && breakpoint.Enabled && errorCode == EXCEPTION_INT_3) {
-                        ThreadAccess access = ThreadAccess.GET_CONTEXT | ThreadAccess.SET_CONTEXT;
-                        Context context = new Context() { ContextFlags = ContextFlags.CONTEXT_CONTROL | ContextFlags.CONTEXT_INTEGER };
-
-                        IntPtr threadHandle = Kernel32.OpenThread(access, false, debugEvent.ThreadId);
-                        if (threadHandle == IntPtr.Zero) throw new InvalidOperationException("Can't open thread");
-
-                        Kernel32.GetThreadContext(threadHandle, ref context);
-
-                        BreakpointEventArgs eventArgs = new BreakpointEventArgs(context, debugEvent, breakpoint);
-                        breakpoint.OnHit(eventArgs);
-
-                        Context newContext = eventArgs.Context;
-                        newContext.Eip = (uint)errorAddress;
-                        newContext.EFlags |= 0x100; // Single step instruction
-
-                        Kernel32.SetThreadContext(threadHandle, ref newContext);
-                        Kernel32.CloseHandle(threadHandle);
-
-
-                        if (breakpoint.Enabled) {
-                            lastBreakpoint = breakpoint;
-                            breakpoint.Disable();
-
-                        } else breakpoint = null;
-
-                    } else if (lastBreakpoint != null && errorCode == EXCEPTION_SINGLE_STEP) {
-                        lastBreakpoint.Enable();
-                    }
-                }
-
-                Kernel32.ContinueDebugEvent(debugEvent.ProcessId, debugEvent.ThreadId, ContinueStatus.DBG_CONTINUE);
-            }
+            return ListenerTask;
         }
         private void Listen(CancellationToken token) {
-            Breakpoint lastBreakpoint = null;
-            Attach();
+            if (!Kernel32.DebugActiveProcess(Process.Id)) {
+                Listening = false;
+                return;
+            }
 
-            while (Attached && !token.IsCancellationRequested) {
+            BreakpointEventArgs lastBreakpoint = null;
+
+            while (Listening && !token.IsCancellationRequested) {
                 // Wait for debuggee's debug event, timeout = 0.5 seconds
                 DebugEvent debugEvent = new DebugEvent();
                 bool success = Kernel32.WaitForDebugEvent(ref debugEvent, 500);
@@ -154,15 +131,14 @@ namespace DebugNET {
 
                 Kernel32.ContinueDebugEvent(debugEvent.ProcessId, debugEvent.ThreadId, ContinueStatus.DBG_CONTINUE);
             }
-            
-            // TODO suspend all threads
-            foreach (Breakpoint breakpoint in breakpoints) {
-                breakpoint.Disable();
-            }
 
-            Detach();
+            SuspendProcess(Process);
+            foreach (Breakpoint breakpoint in breakpoints) breakpoint.Disable();
+            ResumeProcess(Process);
+
+            Kernel32.DebugActiveProcessStop(Process.Id);
         }
-        private void OnDebugEvent(DebugEvent debugEvent, ref Breakpoint lastBreakpoint) {
+        private void OnDebugEvent(DebugEvent debugEvent, ref BreakpointEventArgs lastBreakpoint) {
             if (debugEvent.DebugEventCode != DebugEventType.EXCEPTION_DEBUG_EVENT) return;
 
             uint errorCode = debugEvent.Exception.ExceptionRecord.Code;
@@ -184,8 +160,7 @@ namespace DebugNET {
 
                 BreakpointEventArgs eventArgs = new BreakpointEventArgs(context, debugEvent, breakpoint);
                 breakpoint.OnHit(eventArgs);
-
-                lastBreakpoint = eventArgs.Disable ? null : breakpoint;
+                lastBreakpoint = eventArgs;
 
                 Context newContext = eventArgs.Context;
                 newContext.Eip = (uint)errorAddress;
@@ -194,11 +169,13 @@ namespace DebugNET {
                 Kernel32.SetThreadContext(threadHandle, ref newContext);
                 Kernel32.CloseHandle(threadHandle);
             } else if (errorCode == EXCEPTION_SINGLE_STEP) {
-                // Instruction right after breakpoint
-                if (lastBreakpoint == null) return;
 
-                lastBreakpoint.Enable();
-                lastBreakpoint = null;
+                // Instruction right after breakpoint
+                if (lastBreakpoint != null) {
+                    lastBreakpoint.Breakpoint.Enable();
+                    lastBreakpoint = null;
+                }
+
             }
         }
 
@@ -280,7 +257,7 @@ namespace DebugNET {
                 sign = matches[0].Value[0];
                 offsetString = matches[0].Groups[2].ToString();
 
-                if (sign == '-') baseAddress = (IntPtr)( -Convert.ToInt32(offsetString, 16) );
+                if (sign == '-') baseAddress = (IntPtr)(-Convert.ToInt32(offsetString, 16));
                 else baseAddress = (IntPtr)Convert.ToInt32(offsetString, 16);
             }
 
@@ -297,6 +274,26 @@ namespace DebugNET {
             return offsets;
         }
 
+        private void SuspendProcess(Process process) {
+            foreach (ProcessThread thread in process.Threads) {
+                IntPtr handle = Kernel32.OpenThread(ThreadAccess.SUSPEND_RESUME, false, thread.Id);
+
+                if (handle == IntPtr.Zero) continue;
+
+                Kernel32.SuspendThread(handle);
+                Kernel32.CloseHandle(handle);
+            }
+        }
+        private void ResumeProcess(Process process) {
+            foreach (ProcessThread thread in process.Threads) {
+                IntPtr handle = Kernel32.OpenThread(ThreadAccess.SUSPEND_RESUME, false, thread.Id);
+
+                if (handle == IntPtr.Zero) continue;
+
+                Kernel32.ResumeThread(handle);
+                Kernel32.CloseHandle(handle);
+            }
+        }
 
         #region Read Memory
         public void ReadMemory(IntPtr address, byte[] buffer, int size) {

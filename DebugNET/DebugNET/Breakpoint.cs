@@ -65,7 +65,10 @@ namespace DebugNET {
         public bool Disable() {
             if (!Enabled) return false;
 
-            Debugger.WriteByte(Address, OldInstruction);
+            try {
+                Debugger.WriteByte(Address, OldInstruction);
+            } catch (AccessViolationException) {}
+
             Enabled = false;
             return false;
         }
