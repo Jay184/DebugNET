@@ -3,14 +3,16 @@ using DebugNET.PInvoke;
 
 namespace DebugNET {
     public class BreakpointEventArgs : EventArgs {
-        public Context Context { get; protected set; }
-        public Debugger Debugger { get; private set; }
+        public Context Context { get; set; }
+        public IntPtr Address { get; set; }
+        public bool Disable { get; set; }
+        //public Debugger Debugger { get; private set; }
         public int ProcessId { get; private set; }
         public int ThreadId { get; private set; }
 
-        internal BreakpointEventArgs(Debugger debugger, Context context, DebugEvent debugEvent) {
-            Debugger = debugger;
+        internal BreakpointEventArgs(Context context, DebugEvent debugEvent, Breakpoint breakpoint) {
             Context = context;
+            Address = breakpoint.Address;
             ProcessId = debugEvent.ProcessId;
             ThreadId = debugEvent.ThreadId;
         }

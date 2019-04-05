@@ -6,6 +6,11 @@ namespace DebugNET {
     /// </summary>
     public class Breakpoint {
         /// <summary>
+        /// Executed when this breakpoint is hit by the debugee.
+        /// </summary>
+        public event EventHandler<BreakpointEventArgs> Hit;
+
+        /// <summary>
         /// The location when to halt the debugee
         /// </summary>
         public readonly IntPtr Address;
@@ -22,7 +27,7 @@ namespace DebugNET {
         /// <summary>
         /// Reference to the debugger instance used to write to the memory
         /// </summary>
-        private Debugger Debugger { get; set; }
+        protected Debugger Debugger { get; private set; }
 
 
 
@@ -37,6 +42,11 @@ namespace DebugNET {
             OldInstruction = debugger.ReadByte(Address);
         }
 
+
+
+        internal protected virtual void OnHit(BreakpointEventArgs e) {
+            Hit?.Invoke(Debugger, e);
+        }
 
 
         /// <summary>
