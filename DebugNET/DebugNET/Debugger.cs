@@ -16,6 +16,8 @@ namespace DebugNET {
         protected const uint EXCEPTION_SINGLE_STEP = 0x80000004;
 
 
+        public event EventHandler DebuggeeClosing;
+
         public Process Process { get; private set; }
         protected IntPtr ProcessHandle { get; private set; }
 
@@ -95,6 +97,27 @@ namespace DebugNET {
             }
         }
 
+        public void SuspendProcess(Process process) {
+            foreach (ProcessThread thread in process.Threads) {
+                IntPtr handle = Kernel32.OpenThread(ThreadAccess.SUSPEND_RESUME, false, thread.Id);
+
+                if (handle == IntPtr.Zero) continue;
+
+                Kernel32.SuspendThread(handle);
+                Kernel32.CloseHandle(handle);
+            }
+        }
+        public void ResumeProcess(Process process) {
+            foreach (ProcessThread thread in process.Threads) {
+                IntPtr handle = Kernel32.OpenThread(ThreadAccess.SUSPEND_RESUME, false, thread.Id);
+
+                if (handle == IntPtr.Zero) continue;
+
+                Kernel32.ResumeThread(handle);
+                Kernel32.CloseHandle(handle);
+            }
+        }
+
         public Task StartListen() {
             if (Listening) throw new InvalidOperationException("Debugger already listening");
 
@@ -121,7 +144,19 @@ namespace DebugNET {
             while (Listening) {
                 // Wait for debuggee's debug event, timeout = 0.5 seconds
                 DebugEvent debugEvent = new DebugEvent();
-                bool success = Kernel32.WaitForDebugEvent(ref debugEvent, 500);
+                bool success = Kernel32.WaitForDebugEvent(ref debugEvent, 1000);
+
+                if (lastBreakpoint == null && token.IsCancellationRequested) {
+                    Kernel32.ContinueDebugEvent(debugEvent.ProcessId, debugEvent.ThreadId, ContinueStatus.DBG_CONTINUE);
+                    break;
+                }
+
+                if (success && debugEvent.DebugEventCode == DebugEventType.EXIT_PROCESS_DEBUG_EVENT) {
+                    Kernel32.DebugActiveProcessStop(Process.Id);
+                    Listening = false;
+                    DebuggeeClosing?.Invoke(this, EventArgs.Empty);
+                    return;
+                }
 
                 if (success && debugEvent.DebugEventCode == DebugEventType.EXCEPTION_DEBUG_EVENT) {
 
@@ -159,11 +194,6 @@ namespace DebugNET {
 
                     } else if (errorCode == EXCEPTION_SINGLE_STEP) {
 
-                        if (token.IsCancellationRequested) {
-                            Kernel32.ContinueDebugEvent(debugEvent.ProcessId, debugEvent.ThreadId, ContinueStatus.DBG_CONTINUE);
-                            break;
-                        }
-
                         // Instruction right after breakpoint
                         if (lastBreakpoint != null && !lastBreakpoint.Disable) {
                             lastBreakpoint.Breakpoint.Enable();
@@ -172,13 +202,12 @@ namespace DebugNET {
                     }
                 }
 
-                Kernel32.ContinueDebugEvent(debugEvent.ProcessId, debugEvent.ThreadId, ContinueStatus.DBG_EXCEPTION_HANDLED);
+                Kernel32.ContinueDebugEvent(debugEvent.ProcessId, debugEvent.ThreadId, ContinueStatus.DBG_CONTINUE);
             }
 
             SuspendProcess(Process);
             foreach (Breakpoint breakpoint in breakpoints) breakpoint.Disable();
             ResumeProcess(Process);
-
             Kernel32.DebugActiveProcessStop(Process.Id);
             Listening = false;
         }
@@ -276,6 +305,7 @@ namespace DebugNET {
             return IntPtr.Zero;
         }
 
+
         protected ProcessModule FindModule(string name) {
             if (string.IsNullOrEmpty(name)) throw new ArgumentNullException("name");
 
@@ -312,33 +342,13 @@ namespace DebugNET {
                 offsetString = matches[i].Groups[2].ToString();
 
                 // convert to int
-                offsets[i] = Convert.ToInt32(offsetString, 16);
-                if (sign == '-') offsets[i] *= -1;
+                offsets[i - 1] = Convert.ToInt32(offsetString, 16);
+                if (sign == '-') offsets[i - 1] *= -1;
             }
 
             return offsets;
         }
 
-        private void SuspendProcess(Process process) {
-            foreach (ProcessThread thread in process.Threads) {
-                IntPtr handle = Kernel32.OpenThread(ThreadAccess.SUSPEND_RESUME, false, thread.Id);
-
-                if (handle == IntPtr.Zero) continue;
-
-                Kernel32.SuspendThread(handle);
-                Kernel32.CloseHandle(handle);
-            }
-        }
-        private void ResumeProcess(Process process) {
-            foreach (ProcessThread thread in process.Threads) {
-                IntPtr handle = Kernel32.OpenThread(ThreadAccess.SUSPEND_RESUME, false, thread.Id);
-
-                if (handle == IntPtr.Zero) continue;
-
-                Kernel32.ResumeThread(handle);
-                Kernel32.CloseHandle(handle);
-            }
-        }
 
         #region Read Memory
         public void ReadMemory(IntPtr address, byte[] buffer, int size) {
@@ -408,6 +418,11 @@ namespace DebugNET {
             ReadMemory(address, buffer, buffer.Length);
             return BitConverter.ToDouble(buffer, 0);
         }
+        public string ReadText(IntPtr address, int length) {
+            byte[] buffer = new byte[length];
+            ReadMemory(address, buffer, buffer.Length);
+            return Encoding.ASCII.GetString(buffer);
+        }
         #endregion
         #region Write Memory
         public void WriteMemory(IntPtr address, byte[] buffer, int size) {
@@ -451,16 +466,24 @@ namespace DebugNET {
             WriteMemory(address, buffer, buffer.Length);
         }
         public void WritePtr(IntPtr address, IntPtr value) {
-
+            byte[] buffer = BitConverter.GetBytes(value.ToInt32());
+            WriteMemory(address, buffer, buffer.Length);
         }
         public void WriteUPtr(IntPtr address, UIntPtr value) {
-
+            byte[] buffer = BitConverter.GetBytes(value.ToUInt32());
+            WriteMemory(address, buffer, buffer.Length);
         }
         public void WriteFloat(IntPtr address, float value) {
-
+            byte[] buffer = BitConverter.GetBytes(value);
+            WriteMemory(address, buffer, buffer.Length);
         }
         public void WriteDouble(IntPtr address, double value) {
-
+            byte[] buffer = BitConverter.GetBytes(value);
+            WriteMemory(address, buffer, buffer.Length);
+        }
+        public void WriteText(IntPtr address, string value) {
+            byte[] buffer = Encoding.ASCII.GetBytes(value);
+            WriteMemory(address, buffer, buffer.Length);
         }
         #endregion
 

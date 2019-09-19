@@ -14,7 +14,6 @@ namespace DebugNETExample {
 
             try {
                 Debugger debugger = new Debugger(name);
-
                 IntPtr addr = debugger.Seek("DebugeeProgram.exe", 0x89, 0x45, 0xD0); // DebugeeProgram.exe+13BD8
                 Breakpoint breakpoint = debugger.SetBreakpoint(addr);
 
