@@ -308,35 +308,22 @@ namespace DebugNET {
             return IntPtr.Zero;
         }
 
-        public uint CreateThread(uint parameter) {
+        public IntPtr AllocateMemory(int size) {
+            return Kernel32.VirtualAllocEx(ProcessHandle, IntPtr.Zero, (uint)size, AllocationType.MEM_COMMIT | AllocationType.MEM_RESERVE, MemoryProtection.PAGE_EXECUTE_READWRITE);
+        }
+        public uint CreateThread(IntPtr start, uint parameter) {
             // dwSize with Marshal.SizeOf(typeof(TYPE))
-
-            // Allocate Memory with execute/read/write access
-            IntPtr memAddr = Kernel32.VirtualAllocEx(ProcessHandle, IntPtr.Zero, 4096, AllocationType.MEM_COMMIT | AllocationType.MEM_RESERVE, MemoryProtection.PAGE_EXECUTE_READWRITE);
-
-            // TODO Delete this section
-#if DEBUG
-            byte[] testProgram = new byte[] {
-                0xB0, 0x01, // mov al,01
-                0xB1, 0x02, // mov cl,02
-                0x01, 0xC8, // add eax,ecx
-                0x8B, 0xC3, // mov eax,ebx
-                0xC3 // ret
-            };
-            int written;
-            Kernel32.WriteProcessMemory(ProcessHandle, memAddr, testProgram, testProgram.Length, out written);
-#endif
 
             // Create thread in debuggee process
             uint threadID;
-            IntPtr threadHandle = Kernel32.CreateRemoteThread(ProcessHandle, IntPtr.Zero, 0, memAddr, parameter, 0, out threadID);
+            IntPtr threadHandle = Kernel32.CreateRemoteThread(ProcessHandle, IntPtr.Zero, 0, start, parameter, 0, out threadID);
 
 
             // Wait for thread to finish and release memory pages
             uint exitCode = 0;
             Kernel32.WaitForSingleObject(threadHandle, 0xFFFFFFFF);
             Kernel32.GetExitCodeThread(threadHandle, out exitCode);
-            Kernel32.VirtualFreeEx(ProcessHandle, memAddr, 0, AllocationType.MEM_RELEASE);
+            Kernel32.VirtualFreeEx(ProcessHandle, start, 0, AllocationType.MEM_RELEASE);
             return exitCode;
         }
 
