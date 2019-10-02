@@ -44,6 +44,8 @@
     <Compile Include="Breakpoint.cs" />
     <Compile Include="BreakpointEventArgs.cs" />
     <Compile Include="Debugger.cs" />
+    <Compile Include="PInvoke\MemoryProtection.cs" />
+    <Compile Include="PInvoke\AllocationType.cs" />
     <Compile Include="PInvoke\Context.cs" />
     <Compile Include="PInvoke\Context64.cs" />
     <Compile Include="PInvoke\ContextFlags.cs" />

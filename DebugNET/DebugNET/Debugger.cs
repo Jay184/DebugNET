@@ -40,7 +40,9 @@ namespace DebugNET {
                 new NullReferenceException("Process was null."));
 
 
-            ProcessAccessFlags processAccess = ProcessAccessFlags.VM_OPERATION |
+            ProcessAccessFlags processAccess = ProcessAccessFlags.CREATE_THREAD |
+                    ProcessAccessFlags.QUERY_INFORMATION |
+                    ProcessAccessFlags.VM_OPERATION |
                     ProcessAccessFlags.VM_READ |
                     ProcessAccessFlags.VM_WRITE;
 
@@ -83,7 +85,7 @@ namespace DebugNET {
         public Breakpoint SetBreakpoint(IntPtr address) {
             Breakpoint breakpoint = new Breakpoint(this, address);
 
-            if (breakpoint.Enable() && breakpoints.Add(breakpoint)) {
+            if (breakpoints.Add(breakpoint) && breakpoint.Enable()) {
                 return breakpoint;
             }
 
@@ -130,8 +132,9 @@ namespace DebugNET {
 
             return ListenerTask;
         }
-        public void StopListen() {
+        public Task StopListen() {
             TokenSource.Cancel();
+            return ListenerTask;
         }
         private void Listen(CancellationToken token) {
             if (!Kernel32.DebugActiveProcess(Process.Id)) {
@@ -305,6 +308,39 @@ namespace DebugNET {
             return IntPtr.Zero;
         }
 
+        public uint CreateThread(uint parameter) {
+            // dwSize with Marshal.SizeOf(typeof(TYPE))
+
+            // Allocate Memory with execute/read/write access
+            IntPtr memAddr = Kernel32.VirtualAllocEx(ProcessHandle, IntPtr.Zero, 4096, AllocationType.MEM_COMMIT | AllocationType.MEM_RESERVE, MemoryProtection.PAGE_EXECUTE_READWRITE);
+
+            // TODO Delete this section
+#if DEBUG
+            byte[] testProgram = new byte[] {
+                0xB0, 0x01, // mov al,01
+                0xB1, 0x02, // mov cl,02
+                0x01, 0xC8, // add eax,ecx
+                0x8B, 0xC3, // mov eax,ebx
+                0xC3 // ret
+            };
+            int written;
+            Kernel32.WriteProcessMemory(ProcessHandle, memAddr, testProgram, testProgram.Length, out written);
+#endif
+
+            // Create thread in debuggee process
+            uint threadID;
+            IntPtr threadHandle = Kernel32.CreateRemoteThread(ProcessHandle, IntPtr.Zero, 0, memAddr, parameter, 0, out threadID);
+
+
+            // Wait for thread to finish and release memory pages
+            uint exitCode = 0;
+            Kernel32.WaitForSingleObject(threadHandle, 0xFFFFFFFF);
+            Kernel32.GetExitCodeThread(threadHandle, out exitCode);
+            Kernel32.VirtualFreeEx(ProcessHandle, memAddr, 0, AllocationType.MEM_RELEASE);
+            return exitCode;
+        }
+
+
 
         protected ProcessModule FindModule(string name) {
             if (string.IsNullOrEmpty(name)) throw new ArgumentNullException("name");
@@ -332,7 +368,7 @@ namespace DebugNET {
                 sign = matches[0].Value[0];
                 offsetString = matches[0].Groups[2].ToString();
 
-                if (sign == '-') baseAddress = (IntPtr)(-Convert.ToInt32(offsetString, 16));
+                if (sign == '-') baseAddress = (IntPtr)( -Convert.ToInt32(offsetString, 16) );
                 else baseAddress = (IntPtr)Convert.ToInt32(offsetString, 16);
             }
 
@@ -418,10 +454,20 @@ namespace DebugNET {
             ReadMemory(address, buffer, buffer.Length);
             return BitConverter.ToDouble(buffer, 0);
         }
-        public string ReadText(IntPtr address, int length) {
+        public string ReadText(IntPtr address, int length, Encoding encoding) {
             byte[] buffer = new byte[length];
             ReadMemory(address, buffer, buffer.Length);
-            return Encoding.ASCII.GetString(buffer);
+            return encoding.GetString(buffer);
+        }
+        public string ReadText(IntPtr address, Encoding encoding) {
+            int length = 0;
+            do {
+                length++;
+            } while (ReadByte(address + length) != 0);
+
+            byte[] buffer = new byte[length];
+            ReadMemory(address, buffer, length);
+            return encoding.GetString(buffer);
         }
         #endregion
         #region Write Memory
@@ -481,8 +527,8 @@ namespace DebugNET {
             byte[] buffer = BitConverter.GetBytes(value);
             WriteMemory(address, buffer, buffer.Length);
         }
-        public void WriteText(IntPtr address, string value) {
-            byte[] buffer = Encoding.ASCII.GetBytes(value);
+        public void WriteText(IntPtr address, string value, Encoding encoding) {
+            byte[] buffer = encoding.GetBytes(value);
             WriteMemory(address, buffer, buffer.Length);
         }
         #endregion

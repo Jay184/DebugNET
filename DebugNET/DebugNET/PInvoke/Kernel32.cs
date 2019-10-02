@@ -47,6 +47,16 @@ namespace DebugNET.PInvoke {
         [DllImport("kernel32.dll", SetLastError = true)]
         internal static extern bool SetThreadContext(IntPtr hThread, ref Context64 lpContext);
 
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern IntPtr CreateRemoteThread(IntPtr hProcess, IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, uint lpParameter, uint dwCreationFlags, out uint lpThreadId);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern bool GetExitCodeThread(IntPtr hThread, out uint lpExitCode);
+
+        [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true)]
+        internal static extern IntPtr VirtualAllocEx(IntPtr hProcess, IntPtr lpAddress, uint dwSize, AllocationType flAllocationType, MemoryProtection flProtect);
+        [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true)]
+        internal static extern bool VirtualFreeEx(IntPtr hProcess, IntPtr lpAddress, int dwSize, AllocationType dwFreeType);
+
 
         [DllImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -61,5 +71,8 @@ namespace DebugNET.PInvoke {
         internal static extern bool WaitForDebugEvent(ref DebugEvent lpDebugEvent, int dwMilliseconds);
         [DllImport("kernel32.dll", SetLastError = true)]
         internal static extern bool ContinueDebugEvent(int dwProcessId, int dwThreadId, ContinueStatus dwContinueStatus);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern uint WaitForSingleObject(IntPtr hHandle, uint dwMilliseconds);
     }
 }
