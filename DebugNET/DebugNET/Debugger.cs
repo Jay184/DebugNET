@@ -311,7 +311,7 @@ namespace DebugNET {
         public IntPtr AllocateMemory(int size) {
             return Kernel32.VirtualAllocEx(ProcessHandle, IntPtr.Zero, (uint)size, AllocationType.MEM_COMMIT | AllocationType.MEM_RESERVE, MemoryProtection.PAGE_EXECUTE_READWRITE);
         }
-        public uint CreateThread(IntPtr start, uint parameter) {
+        public Task<uint> CreateThread(IntPtr start, uint parameter, uint timeout = 0xFFFFFFFF) {
             // dwSize with Marshal.SizeOf(typeof(TYPE))
 
             // Create thread in debuggee process
@@ -320,11 +320,13 @@ namespace DebugNET {
 
 
             // Wait for thread to finish and release memory pages
-            uint exitCode = 0;
-            Kernel32.WaitForSingleObject(threadHandle, 0xFFFFFFFF);
-            Kernel32.GetExitCodeThread(threadHandle, out exitCode);
-            Kernel32.VirtualFreeEx(ProcessHandle, start, 0, AllocationType.MEM_RELEASE);
-            return exitCode;
+            return Task.Run(() => {
+                uint exitCode = 0;
+                Kernel32.WaitForSingleObject(threadHandle, timeout);
+                Kernel32.GetExitCodeThread(threadHandle, out exitCode);
+                Kernel32.VirtualFreeEx(ProcessHandle, start, 0, AllocationType.MEM_RELEASE);
+                return exitCode;
+            });
         }
 
 
