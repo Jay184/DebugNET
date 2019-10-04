@@ -311,7 +311,11 @@ namespace DebugNET {
         public IntPtr AllocateMemory(int size) {
             return Kernel32.VirtualAllocEx(ProcessHandle, IntPtr.Zero, (uint)size, AllocationType.MEM_COMMIT | AllocationType.MEM_RESERVE, MemoryProtection.PAGE_EXECUTE_READWRITE);
         }
-        public Task<uint> CreateThread(IntPtr start, uint parameter, uint timeout = 0xFFFFFFFF) {
+        public void FreeMemory(IntPtr start) {
+            Kernel32.VirtualFreeEx(ProcessHandle, start, 0, AllocationType.MEM_RELEASE);
+        }
+
+        public Task<uint> CreateThread(IntPtr start, uint parameter = 0, uint timeout = 0xFFFFFFFF) {
             // dwSize with Marshal.SizeOf(typeof(TYPE))
 
             // Create thread in debuggee process
@@ -324,7 +328,6 @@ namespace DebugNET {
                 uint exitCode = 0;
                 Kernel32.WaitForSingleObject(threadHandle, timeout);
                 Kernel32.GetExitCodeThread(threadHandle, out exitCode);
-                Kernel32.VirtualFreeEx(ProcessHandle, start, 0, AllocationType.MEM_RELEASE);
                 return exitCode;
             });
         }
@@ -458,6 +461,20 @@ namespace DebugNET {
             ReadMemory(address, buffer, length);
             return encoding.GetString(buffer);
         }
+        public T ReadStruct<T>(IntPtr address) where T : struct {
+            T dummy = default(T);
+            int size = Marshal.SizeOf(dummy);
+            byte[] buffer = new byte[size];
+
+            ReadMemory(address, buffer, size);
+
+            IntPtr memory = Marshal.AllocHGlobal(size);
+            Marshal.Copy(buffer, 0, memory, size);
+            dummy = Marshal.PtrToStructure<T>(memory);
+            Marshal.FreeHGlobal(memory);
+
+            return dummy;
+        }
         #endregion
         #region Write Memory
         public void WriteMemory(IntPtr address, byte[] buffer, int size) {
@@ -520,7 +537,23 @@ namespace DebugNET {
             byte[] buffer = encoding.GetBytes(value);
             WriteMemory(address, buffer, buffer.Length);
         }
+        public void WriteStruct<T>(IntPtr address, T value) where T : struct {
+            int size = Marshal.SizeOf(value);
+            byte[] buffer = new byte[size];
+
+            IntPtr memory = Marshal.AllocHGlobal(size);
+            Marshal.StructureToPtr(value, memory, false);
+            Marshal.Copy(memory, buffer, 0, size);
+            Marshal.FreeHGlobal(memory);
+
+            WriteMemory(address, buffer, size);
+        }
         #endregion
+        public void CopyMemory(IntPtr address, IntPtr destination, int size) {
+            byte[] buffer = new byte[size];
+            ReadMemory(address, buffer, size);
+            WriteMemory(destination, buffer, size);
+        }
 
 
         #region IDisposable
