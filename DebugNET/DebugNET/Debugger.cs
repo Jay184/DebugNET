@@ -44,7 +44,8 @@ namespace DebugNET {
                     ProcessAccessFlags.QUERY_INFORMATION |
                     ProcessAccessFlags.VM_OPERATION |
                     ProcessAccessFlags.VM_READ |
-                    ProcessAccessFlags.VM_WRITE;
+                    ProcessAccessFlags.VM_WRITE |
+                    ProcessAccessFlags.SYNCHRONIZE;
 
             ProcessHandle = Kernel32.OpenProcess(processAccess, false, process.Id);
 
