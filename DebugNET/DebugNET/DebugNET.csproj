@@ -44,6 +44,10 @@
     <Compile Include="Breakpoint.cs" />
     <Compile Include="BreakpointEventArgs.cs" />
     <Compile Include="Debugger.cs" />
+    <Compile Include="PInvoke\ObjectWaitEvent.cs" />
+    <Compile Include="PInvoke\ModuleHandleFlags.cs" />
+    <Compile Include="PInvoke\LoadLibraryFlags.cs" />
+    <Compile Include="PInvoke\ThreadCreationFlags.cs" />
     <Compile Include="PInvoke\MemoryProtection.cs" />
     <Compile Include="PInvoke\AllocationType.cs" />
     <Compile Include="PInvoke\Context.cs" />

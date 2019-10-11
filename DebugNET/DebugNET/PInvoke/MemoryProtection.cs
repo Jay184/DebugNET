@@ -2,7 +2,7 @@
 
 namespace DebugNET.PInvoke {
     [Flags]
-    public enum MemoryProtection : uint {
+    internal enum MemoryProtection : uint {
         PAGE_EXECUTE = 0x10,
         PAGE_EXECUTE_READ = 0x20,
         PAGE_EXECUTE_READWRITE = 0x40,
@@ -15,8 +15,8 @@ namespace DebugNET.PInvoke {
         PAGE_TARGETS_NO_UPDATE = 0x40000000,
 
         // Modifiers
-        PAGE_GUARD = 0x100,
-        PAGE_NOCACHE = 0x200,
-        PAGE_WRITECOMBINE = 0x400
+        PAGE_GUARD = 0x0100,
+        PAGE_NOCACHE = 0x0200,
+        PAGE_WRITECOMBINE = 0x0400
     }
 }
