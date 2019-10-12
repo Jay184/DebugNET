@@ -159,7 +159,7 @@ namespace DebugNET.PInvoke {
         /// <param name="dwFreeType">The type of free operation.</param>
         /// <returns>If the function succeeds, the return value is a nonzero value; otherwise, it is zero.</returns>
         [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true)]
-        internal static extern bool VirtualFreeEx(IntPtr hProcess, IntPtr lpAddress, int dwSize, AllocationType dwFreeType);
+        internal static extern bool VirtualFreeEx(IntPtr hProcess, IntPtr lpAddress, uint dwSize, AllocationType dwFreeType);
 
 
         /// <summary>Waits until the specified object is in the signaled state or the time-out interval elapses.</summary>

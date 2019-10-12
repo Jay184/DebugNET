@@ -14,6 +14,7 @@ namespace DebugNET {
         // These should be in PInvoke.ExceptionCodeFlags but I cannot find an offcial resource listing all values.
         protected const uint EXCEPTION_BREAKPOINT = 0x80000003;
         protected const uint EXCEPTION_SINGLE_STEP = 0x80000004;
+        protected const string OFFSETPATTERN = @"(\+|\-)?(?:0x)?([a-fA-F0-9]{1,8})";
         private const ProcessAccessFlags ACCESS =
                     ProcessAccessFlags.CREATE_THREAD |
                     ProcessAccessFlags.QUERY_INFORMATION |
@@ -21,13 +22,16 @@ namespace DebugNET {
                     ProcessAccessFlags.VM_READ |
                     ProcessAccessFlags.VM_WRITE |
                     ProcessAccessFlags.SYNCHRONIZE;
-        protected const string OffsetPattern = @"(\+|\-)?(?:0x)?([a-fA-F0-9]{1,8})";
 
 
+        // TODO custom eventhandlers
+        public event EventHandler Attached;
+        public event EventHandler Detached;
+
+
+        public bool IsAttached { get; private set; }
         public Process Process { get; private set; }
         protected IntPtr ProcessHandle { get; private set; }
-
-        public bool Attached { get; private set; }
 
 
         private bool isDisposed;
@@ -48,26 +52,87 @@ namespace DebugNET {
 
 
 
+        /// <summary>Attaches the debugger to the process. Blocks the current thread.</summary>
+        /// <exception cref="AttachException">When already attached.</exception>
         public void Attach() => AttachAsync(CancellationToken.None).Wait();
+        /// <summary>Attaches the debugger to the process asynchronously.</summary>
+        /// <returns>Task that represents the listener.</returns>
+        /// <exception cref="AttachException">When already attached.</exception>
         public async Task AttachAsync() => await AttachAsync(CancellationToken.None);
+        /// <summary>Attaches the debugger to the process asynchronously.</summary>
+        /// <param name="token">Token used to cancel the debugging.</param>
+        /// <returns>Task that represents the listener.</returns>
+        /// <exception cref="AttachException">When already attached.</exception>
         public async Task AttachAsync(CancellationToken token) {
-            if (Attached) throw new AttachException("Cannot attach twice.");
-            Attached = true;
+            if (IsAttached) throw new AttachException("Cannot attach twice.");
 
-            for (int i = 0; i < 10; i++) {
+            // TODO check remote debugging and throw if true
 
-                if (token.IsCancellationRequested) {
-                    Console.WriteLine("Task {0} cancelled");
-                    Detach();
-                    token.ThrowIfCancellationRequested();
-                }
+            // Start debugging
+            if (Kernel32.DebugActiveProcess(Process.Id)) {
+                IsAttached = true;
+                OnAttached();
+            }
 
-                await Task.Delay(1000);
+            while (IsAttached) {
+                await DebuggingLoop(token);
             }
         }
+        /// <summary>Detaches the debugger from the process.</summary>
+        /// <exception cref="AttachException">When not attached.</exception>
         public void Detach() {
-            if (!Attached) throw new AttachException("Cannot detach twice.");
-            Attached = false;
+            if (!IsAttached) throw new AttachException("Cannot detach twice.");
+
+            if (Kernel32.DebugActiveProcessStop(Process.Id)) {
+                OnDetached();
+            }
+
+            IsAttached = false;
+        }
+
+        protected virtual async Task DebuggingLoop(CancellationToken token) {
+            Console.WriteLine("Debugging");
+
+            if (token.IsCancellationRequested) {
+                Console.WriteLine("Task {0} cancelled");
+                Detach();
+                token.ThrowIfCancellationRequested();
+            }
+
+            await Task.Delay(100);
+        }
+
+
+
+        public IntPtr AllocateMemory(int size = 4096) {
+            return Kernel32.VirtualAllocEx(ProcessHandle, IntPtr.Zero, (uint)size, AllocationType.MEM_COMMIT | AllocationType.MEM_RESERVE, MemoryProtection.PAGE_EXECUTE_READWRITE);
+        }
+        public IntPtr AllocateMemory(IntPtr address, int size) {
+            return Kernel32.VirtualAllocEx(ProcessHandle, address, (uint)size, AllocationType.MEM_COMMIT | AllocationType.MEM_RESERVE, MemoryProtection.PAGE_EXECUTE_READWRITE);
+        }
+
+        public bool FreeMemory(IntPtr start) {
+            return Kernel32.VirtualFreeEx(ProcessHandle, start, 0, AllocationType.MEM_RELEASE);
+        }
+        public bool FreeMemory(IntPtr start, int size) {
+            return Kernel32.VirtualFreeEx(ProcessHandle, start, (uint)size, AllocationType.MEM_RELEASE);
+        }
+
+        public uint CreateThread(IntPtr start, IntPtr parameter, uint timeout = Kernel32.UINFINITE) => CreateThreadAsync(start, parameter, timeout).Result;
+        public uint CreateThread(IntPtr start, uint parameter = 0, uint timeout = Kernel32.UINFINITE) => CreateThreadAsync(start, parameter, timeout).Result;
+        public async Task<uint> CreateThreadAsync(IntPtr start, IntPtr parameter, uint timeout = Kernel32.UINFINITE) => await CreateThreadAsync(start, parameter, timeout);
+        public async Task<uint> CreateThreadAsync(IntPtr start, uint parameter = 0, uint timeout = Kernel32.UINFINITE) {
+            // Create thread in debuggee process
+            IntPtr threadHandle = Kernel32.CreateRemoteThread(ProcessHandle, IntPtr.Zero, 0, start, parameter, ThreadCreationFlags.None, out uint threadID);
+
+            Task<uint> thread = Task.Run(() => {
+                Kernel32.WaitForSingleObject(threadHandle, timeout);
+                Kernel32.GetExitCodeThread(threadHandle, out uint code);
+                return code;
+            });
+
+            uint exitCode = await thread;
+            return exitCode;
         }
 
 
@@ -162,7 +227,7 @@ namespace DebugNET {
 
             if (string.IsNullOrEmpty(address)) return new int[0];
 
-            MatchCollection matches = Regex.Matches(address, OffsetPattern);
+            MatchCollection matches = Regex.Matches(address, OFFSETPATTERN);
             int[] offsets = new int[matches.Count - 1];
 
             string offsetString;
@@ -369,6 +434,19 @@ namespace DebugNET {
             WriteMemory(destination, buffer, size);
         }
 
+        #region Events
+        private void OnAttached(/* TODO parameters for custom EventArgs */) {
+            Attached?.Invoke(this, EventArgs.Empty);
+            OnAttached(EventArgs.Empty);
+        }
+        protected virtual void OnAttached(EventArgs e) { }
+
+        private void OnDetached(/* TODO parameters for custom EventArgs */) {
+            Detached?.Invoke(this, EventArgs.Empty);
+            OnDetached(EventArgs.Empty);
+        }
+        protected virtual void OnDetached(EventArgs e) { }
+        #endregion
 
         #region IDisposable
         ~Debugger2() => Dispose(false);
@@ -381,6 +459,8 @@ namespace DebugNET {
             if (isDisposed) return;
 
             // TODO release resources
+            if (IsAttached) Detach();
+
             Kernel32.CloseHandle(ProcessHandle);
             ProcessHandle = IntPtr.Zero;
             Process = null;

@@ -59,26 +59,6 @@ namespace DebugNET {
 
 
 
-        //public bool Attach() {
-        //    if (Attached) return false;
-
-        //    Attached = Kernel32.DebugActiveProcess(Process.Id);
-        //    return Attached;
-        //}
-        //public bool Detach() {
-        //    if (!Attached) return false;
-
-        //    if (ListenerTask != null) {
-        //        if (ListenerTokenSource != null) ListenerTokenSource.Cancel(true);
-
-        //        ListenerTask.Wait();
-        //        Attached = Kernel32.DebugActiveProcessStop(Process.Id);
-        //    }
-
-        //    Attached = Kernel32.DebugActiveProcessStop(Process.Id);
-        //    return !Attached;
-        //}
-
         public Breakpoint SetBreakpoint(string address) {
             IntPtr addrPtr = GetAddress(address);
             return SetBreakpoint(addrPtr);
@@ -312,8 +292,8 @@ namespace DebugNET {
         public IntPtr AllocateMemory(int size) {
             return Kernel32.VirtualAllocEx(ProcessHandle, IntPtr.Zero, (uint)size, AllocationType.MEM_COMMIT | AllocationType.MEM_RESERVE, MemoryProtection.PAGE_EXECUTE_READWRITE);
         }
-        public void FreeMemory(IntPtr start) {
-            Kernel32.VirtualFreeEx(ProcessHandle, start, 0, AllocationType.MEM_RELEASE);
+        public bool FreeMemory(IntPtr start) {
+            return Kernel32.VirtualFreeEx(ProcessHandle, start, 0, AllocationType.MEM_RELEASE);
         }
 
         public Task<uint> CreateThread(IntPtr start, uint parameter = 0, uint timeout = Kernel32.UINFINITE) {
