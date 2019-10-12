@@ -10,6 +10,9 @@ namespace DebugNET.PInvoke {
     internal static class Kernel32 {
         /// <summary>Represents INFINITE / INFINITY in most P/Invoke methods</summary>
         internal const int INFINITE = -1;
+        /// <summary>Represents INFINITE / INFINITY in most P/Invoke methods</summary>
+        internal const uint UINFINITE = 0xFFFFFFFF;
+
 
         /// <summary>Opens an existing local process object.</summary>
         /// <param name="dwDesiredAccess">The access to the process object.</param>
@@ -261,7 +264,7 @@ namespace DebugNET.PInvoke {
         /// <returns>If the function succeeds, the return value is nonzero; otherwise, it is zero.</returns>
         [DllImport("Kernel32.dll", SetLastError = true, ExactSpelling = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
-        internal static extern bool CheckRemoteDebuggerPresent(SafeHandle hProcess, [MarshalAs(UnmanagedType.Bool)]ref bool pbDebuggerPresent);
+        internal static extern bool CheckRemoteDebuggerPresent(IntPtr hProcess, [MarshalAs(UnmanagedType.Bool)]ref bool pbDebuggerPresent);
 
         /// <summary>Causes a breakpoint exception to occur in the specified process. This allows the calling thread to signal the debugger to handle the exception.</summary>
         /// <param name="dwProcessHandle">A handle to the process.</param>

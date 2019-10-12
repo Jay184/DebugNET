@@ -10,212 +10,72 @@ using System.Threading.Tasks;
 using DebugNET.PInvoke;
 
 namespace DebugNET {
-    public class Debugger : IDisposable {
-        protected const string OffsetPattern = @"(\+|\-)?(?:0x)?([a-fA-F0-9]{1,8})";
-        protected const uint EXCEPTION_INT_3 = 0x80000003;
+    public class Debugger2 : IDisposable {
+        // These should be in PInvoke.ExceptionCodeFlags but I cannot find an offcial resource listing all values.
+        protected const uint EXCEPTION_BREAKPOINT = 0x80000003;
         protected const uint EXCEPTION_SINGLE_STEP = 0x80000004;
-
-
-        public event EventHandler DebuggeeClosing;
-
-        public Process Process { get; private set; }
-        protected IntPtr ProcessHandle { get; private set; }
-
-        protected CancellationTokenSource TokenSource { get; private set; }
-        protected Task ListenerTask { get; private set; }
-
-        public bool Attached { get; private set; }
-        public bool Listening { get; private set; }
-
-        public Breakpoint[] Breakpoints => breakpoints.ToArray();
-        private HashSet<Breakpoint> breakpoints;
-
-        private bool isDisposed;
-
-
-
-        public Debugger(Process process) {
-            breakpoints = new HashSet<Breakpoint>();
-            Process = process ?? throw new ProcessNotFoundException("Cannot find the process.",
-                new NullReferenceException("Process was null."));
-
-
-            ProcessAccessFlags processAccess = ProcessAccessFlags.CREATE_THREAD |
+        private const ProcessAccessFlags ACCESS =
+                    ProcessAccessFlags.CREATE_THREAD |
                     ProcessAccessFlags.QUERY_INFORMATION |
                     ProcessAccessFlags.VM_OPERATION |
                     ProcessAccessFlags.VM_READ |
                     ProcessAccessFlags.VM_WRITE |
                     ProcessAccessFlags.SYNCHRONIZE;
-
-            ProcessHandle = Kernel32.OpenProcess(processAccess, false, process.Id);
-
-
-            if (ProcessHandle == IntPtr.Zero) throw new InvalidOperationException("Could not open the process.");
-        }
-        public Debugger(int pid) : this(Process.GetProcessById(pid)) { }
-        public Debugger(string name) : this(Process.GetProcessesByName(name).FirstOrDefault()) {
-            if (string.IsNullOrEmpty(name)) throw new ArgumentNullException("name");
-        }
+        protected const string OffsetPattern = @"(\+|\-)?(?:0x)?([a-fA-F0-9]{1,8})";
 
 
+        public Process Process { get; private set; }
+        protected IntPtr ProcessHandle { get; private set; }
 
-        //public bool Attach() {
-        //    if (Attached) return false;
+        public bool Attached { get; private set; }
 
-        //    Attached = Kernel32.DebugActiveProcess(Process.Id);
-        //    return Attached;
-        //}
-        //public bool Detach() {
-        //    if (!Attached) return false;
 
-        //    if (ListenerTask != null) {
-        //        if (ListenerTokenSource != null) ListenerTokenSource.Cancel(true);
+        private bool isDisposed;
 
-        //        ListenerTask.Wait();
-        //        Attached = Kernel32.DebugActiveProcessStop(Process.Id);
-        //    }
 
-        //    Attached = Kernel32.DebugActiveProcessStop(Process.Id);
-        //    return !Attached;
-        //}
 
-        public Breakpoint SetBreakpoint(string address) {
-            IntPtr addrPtr = GetAddress(address);
-            return SetBreakpoint(addrPtr);
-        }
-        public Breakpoint SetBreakpoint(IntPtr address) {
-            Breakpoint breakpoint = new Breakpoint(this, address);
+        public Debugger2(Process process) {
+            Process = process ?? throw new ProcessNotFoundException("Cannot find the process.",
+                new NullReferenceException("Process was null."));
 
-            if (breakpoints.Add(breakpoint) && breakpoint.Enable()) {
-                return breakpoint;
-            }
+            IntPtr handle = Kernel32.OpenProcess(ACCESS, false, process.Id);
 
-            return null;
-        }
-        public void UnsetBreakpoint(Breakpoint breakpoint) {
-            if (breakpoints.Contains(breakpoint)) {
-                if (breakpoint.Enabled) breakpoint.Disable();
+            if (handle == IntPtr.Zero) throw new ProcessNotFoundException("Cannot open the process.",
+                new InvalidOperationException("Cannot get Process handle."));
 
-                breakpoints.Remove(breakpoint);
-            }
+            ProcessHandle = handle;
         }
 
-        public void SuspendProcess(Process process) {
-            foreach (ProcessThread thread in process.Threads) {
-                IntPtr handle = Kernel32.OpenThread(ThreadAccess.SUSPEND_RESUME, false, thread.Id);
 
-                if (handle == IntPtr.Zero) continue;
 
-                Kernel32.SuspendThread(handle);
-                Kernel32.CloseHandle(handle);
-            }
-        }
-        public void ResumeProcess(Process process) {
-            foreach (ProcessThread thread in process.Threads) {
-                IntPtr handle = Kernel32.OpenThread(ThreadAccess.SUSPEND_RESUME, false, thread.Id);
+        public void Attach() => AttachAsync(CancellationToken.None).Wait();
+        public async Task AttachAsync() => await AttachAsync(CancellationToken.None);
+        public async Task AttachAsync(CancellationToken token) {
+            if (Attached) throw new AttachException("Cannot attach twice.");
+            Attached = true;
 
-                if (handle == IntPtr.Zero) continue;
+            for (int i = 0; i < 10; i++) {
 
-                Kernel32.ResumeThread(handle);
-                Kernel32.CloseHandle(handle);
-            }
-        }
-
-        public Task StartListen() {
-            if (Listening) throw new InvalidOperationException("Debugger already listening");
-
-            TokenSource = new CancellationTokenSource();
-            CancellationToken token = TokenSource.Token;
-
-            ListenerTask = new Task(() => Listen(token), token, TaskCreationOptions.LongRunning);
-            ListenerTask.Start();
-            Listening = true;
-
-            return ListenerTask;
-        }
-        public Task StopListen() {
-            TokenSource.Cancel();
-            return ListenerTask;
-        }
-        private void Listen(CancellationToken token) {
-            if (!Kernel32.DebugActiveProcess(Process.Id)) {
-                Listening = false;
-                return;
-            }
-
-            BreakpointEventArgs lastBreakpoint = null;
-
-            while (Listening) {
-                // Wait for debuggee's debug event, timeout = 0.5 seconds
-                DebugEvent debugEvent = new DebugEvent();
-                bool success = Kernel32.WaitForDebugEvent(ref debugEvent, 1000);
-
-                if (lastBreakpoint == null && token.IsCancellationRequested) {
-                    Kernel32.ContinueDebugEvent(debugEvent.ProcessId, debugEvent.ThreadId, ContinueStatus.DBG_CONTINUE);
-                    break;
+                if (token.IsCancellationRequested) {
+                    Console.WriteLine("Task {0} cancelled");
+                    Detach();
+                    token.ThrowIfCancellationRequested();
                 }
 
-                if (success && debugEvent.DebugEventCode == DebugEventType.EXIT_PROCESS_DEBUG_EVENT) {
-                    Kernel32.DebugActiveProcessStop(Process.Id);
-                    Listening = false;
-                    DebuggeeClosing?.Invoke(this, EventArgs.Empty);
-                    return;
-                }
-
-                if (success && debugEvent.DebugEventCode == DebugEventType.EXCEPTION_DEBUG_EVENT) {
-
-                    uint errorCode = debugEvent.Exception.ExceptionRecord.Code;
-                    IntPtr errorAddress = debugEvent.Exception.ExceptionRecord.Address;
-                    Breakpoint breakpoint = breakpoints.SingleOrDefault(bp => bp.Address == errorAddress);
-
-                    if (errorCode == EXCEPTION_INT_3 && breakpoint != null) {
-
-                        // Breakpoint hit
-                        breakpoint.Disable();
-
-                        // Get Context
-                        ThreadAccess access = ThreadAccess.GET_CONTEXT | ThreadAccess.SET_CONTEXT;
-                        Context context = new Context() { ContextFlags = ContextFlags.CONTEXT_CONTROL | ContextFlags.CONTEXT_INTEGER };
-
-                        IntPtr threadHandle = Kernel32.OpenThread(access, false, debugEvent.ThreadId);
-                        if (threadHandle == IntPtr.Zero) throw new InvalidOperationException("Can't open thread");
-
-                        Kernel32.GetThreadContext(threadHandle, ref context);
-
-                        // Trigger event
-                        BreakpointEventArgs eventArgs = new BreakpointEventArgs(context, debugEvent, breakpoint);
-                        breakpoint.OnHit(eventArgs);
-
-                        // Prepare for breakpoint reactivation
-                        lastBreakpoint = eventArgs;
-                        Context newContext = eventArgs.Context;
-                        newContext.Eip = (uint)errorAddress;
-                        newContext.EFlags |= 0x100; // Single step instruction
-
-                        // Set Context back
-                        Kernel32.SetThreadContext(threadHandle, ref newContext);
-                        Kernel32.CloseHandle(threadHandle);
-
-                    } else if (errorCode == EXCEPTION_SINGLE_STEP) {
-
-                        // Instruction right after breakpoint
-                        if (lastBreakpoint != null && !lastBreakpoint.Disable) {
-                            lastBreakpoint.Breakpoint.Enable();
-                        }
-                        lastBreakpoint = null;
-                    }
-                }
-
-                Kernel32.ContinueDebugEvent(debugEvent.ProcessId, debugEvent.ThreadId, ContinueStatus.DBG_CONTINUE);
+                await Task.Delay(1000);
             }
-
-            SuspendProcess(Process);
-            foreach (Breakpoint breakpoint in breakpoints) breakpoint.Disable();
-            ResumeProcess(Process);
-            Kernel32.DebugActiveProcessStop(Process.Id);
-            Listening = false;
+        }
+        public void Detach() {
+            if (!Attached) throw new AttachException("Cannot detach twice.");
+            Attached = false;
         }
 
+
+        /// <summary>Returns the address to a string.</summary>
+        /// <param name="address">String in form "module"+offsets</param>
+        /// <returns>Pointer to the address specified.</returns>
+        /// <exception cref="ArgumentNullException">address</exception>
+        /// <exception cref="ArgumentException">module name</exception>
         public IntPtr GetAddress(string address) {
             if (string.IsNullOrEmpty(address)) throw new ArgumentNullException("address");
 
@@ -237,12 +97,18 @@ namespace DebugNET {
 
             int[] offsets = GetOffsets(address, out baseAddress);
 
-            if (!string.IsNullOrEmpty(moduleName)) {
-                return GetAddress(moduleName, baseAddress, offsets);
-            }
 
-            return GetAddress(baseAddress, offsets);
+            return GetAddress(moduleName, baseAddress, offsets);
+
+            // if (!string.IsNullOrEmpty(moduleName)) return GetAddress(moduleName, baseAddress, offsets);
+            // return GetAddress(baseAddress, offsets);
         }
+        /// <summary>Returns the address to a string.</summary>
+        /// <param name="moduleName">Name of the module.</param>
+        /// <param name="baseAddress">Address.</param>
+        /// <param name="offsets">Array of offsets.</param>
+        /// <returns>Pointer to the address specified.</returns>
+        /// <exception cref="ArgumentNullException">module name</exception>
         public IntPtr GetAddress(string moduleName, IntPtr baseAddress, params int[] offsets) {
             if (string.IsNullOrEmpty(moduleName)) throw new ArgumentNullException("moduleName");
 
@@ -253,6 +119,11 @@ namespace DebugNET {
             IntPtr address = IntPtr.Add(module.BaseAddress, baseAddress.ToInt32());
             return GetAddress(address, offsets);
         }
+        /// <summary>Returns the address to a string.</summary>
+        /// <param name="baseAddress"></param>
+        /// <param name="offsets"></param>
+        /// <returns>Pointer to the address specified.</returns>
+        /// <exception cref="ArgumentException">base address</exception>
         public IntPtr GetAddress(IntPtr baseAddress, params int[] offsets) {
             if (baseAddress == IntPtr.Zero) throw new ArgumentException("Invalid base address");
 
@@ -268,71 +139,11 @@ namespace DebugNET {
             return address;
         }
 
-        public IntPtr Seek(string moduleName, params byte[] data) {
-            if (string.IsNullOrEmpty(moduleName)) throw new ArgumentNullException("moduleName");
-            else if (data == null) throw new ArgumentNullException("data");
-            else if (data.Length == 0) throw new ArgumentException("Empty data");
 
-
-            ProcessModule module = FindModule(moduleName);
-            if (module == null) return IntPtr.Zero;
-
-            IntPtr address = module.BaseAddress;
-
-
-            for (int i = 0; i < module.ModuleMemorySize; i++) {
-                byte b = ReadByte(address);
-
-                // Check if first byte is equal
-                if (b == data[0]) {
-                    // Return if only one byte long
-                    if (data.Length == 1) return address;
-
-                    // Check if data is in the module's memory
-                    if (i + data.Length >= module.ModuleMemorySize) return IntPtr.Zero;
-
-                    IntPtr firstAddress = address;
-                    // Read following N bytes and compare
-                    for (int j = 1; j < data.Length; j++) {
-                        firstAddress = IntPtr.Add(firstAddress, 1);
-
-                        if (data[j] == ReadByte(firstAddress)) {
-                            if (j + 1 == data.Length) return address;
-
-                        } else break;
-                    }
-                }
-
-                address = IntPtr.Add(address, 1);
-            }
-
-            return IntPtr.Zero;
-        }
-
-        public IntPtr AllocateMemory(int size) {
-            return Kernel32.VirtualAllocEx(ProcessHandle, IntPtr.Zero, (uint)size, AllocationType.MEM_COMMIT | AllocationType.MEM_RESERVE, MemoryProtection.PAGE_EXECUTE_READWRITE);
-        }
-        public void FreeMemory(IntPtr start) {
-            Kernel32.VirtualFreeEx(ProcessHandle, start, 0, AllocationType.MEM_RELEASE);
-        }
-
-        public Task<uint> CreateThread(IntPtr start, uint parameter = 0, uint timeout = Kernel32.UINFINITE) {
-            // dwSize with Marshal.SizeOf(typeof(TYPE))
-
-            // Create thread in debuggee process
-            IntPtr threadHandle = Kernel32.CreateRemoteThread(ProcessHandle, IntPtr.Zero, 0, start, parameter, 0, out uint threadID);
-
-
-            // Wait for thread to finish and release memory pages
-            return Task.Run(() => {
-                Kernel32.WaitForSingleObject(threadHandle, timeout);
-                Kernel32.GetExitCodeThread(threadHandle, out uint exitCode);
-                return exitCode;
-            });
-        }
-
-
-
+        /// <summary>Returns the first module that matches the name.</summary>
+        /// <param name="name">Name of the module.</param>
+        /// <returns>ProcessModule with the specified name.</returns>
+        /// <exception cref="ArgumentNullException">name</exception>
         protected ProcessModule FindModule(string name) {
             if (string.IsNullOrEmpty(name)) throw new ArgumentNullException("name");
 
@@ -342,6 +153,10 @@ namespace DebugNET {
 
             return null;
         }
+        /// <summary>Splits a string into an array of offsets. Additionally returns the first result seperately.</summary>
+        /// <param name="address">String of offsets seperated with '+' or '-'.</param>
+        /// <param name="baseAddress">First result.</param>
+        /// <returns>Array of offsets.</returns>
         protected int[] GetOffsets(string address, out IntPtr baseAddress) {
             baseAddress = IntPtr.Zero;
 
@@ -556,7 +371,7 @@ namespace DebugNET {
 
 
         #region IDisposable
-        ~Debugger() => Dispose(false);
+        ~Debugger2() => Dispose(false);
 
         public void Dispose() {
             Dispose(true);
@@ -565,12 +380,11 @@ namespace DebugNET {
         private void Dispose(bool disposing) {
             if (isDisposed) return;
 
-            foreach (Breakpoint breakpoint in breakpoints) {
-                breakpoint.Disable();
-            }
+            // TODO release resources
             Kernel32.CloseHandle(ProcessHandle);
-            Process?.Dispose();
             ProcessHandle = IntPtr.Zero;
+            Process = null;
+
             isDisposed = true;
         }
         #endregion

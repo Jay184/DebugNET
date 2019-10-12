@@ -44,6 +44,7 @@
     <Compile Include="Breakpoint.cs" />
     <Compile Include="BreakpointEventArgs.cs" />
     <Compile Include="Debugger.cs" />
+    <Compile Include="Debugger2.cs" />
     <Compile Include="PInvoke\ObjectWaitEvent.cs" />
     <Compile Include="PInvoke\ModuleHandleFlags.cs" />
     <Compile Include="PInvoke\LoadLibraryFlags.cs" />
@@ -72,6 +73,7 @@
     <Compile Include="PInvoke\ThreadAccess.cs" />
     <Compile Include="PInvoke\UnloadDLLDebugInfo.cs" />
     <Compile Include="PInvoke\XSaveFormat64.cs" />
+    <Compile Include="AttachException.cs" />
     <Compile Include="ProcessNotFoundException.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
