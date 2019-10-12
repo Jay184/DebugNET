@@ -29,9 +29,11 @@ namespace DebugNET {
         // TODO custom eventhandlers
         public event EventHandler Attached;
         public event EventHandler Detached;
+        public event EventHandler ProcessExited;
 
 
         public bool IsAttached { get; private set; }
+        public BreakpointCollection Breakpoints { get; private set; }
         public Process Process { get; private set; }
         protected IntPtr ProcessHandle { get; private set; }
 
@@ -50,6 +52,7 @@ namespace DebugNET {
                 new InvalidOperationException("Cannot get Process handle."));
 
             ProcessHandle = handle;
+            Breakpoints = new BreakpointCollection();
         }
 
 
@@ -93,7 +96,10 @@ namespace DebugNET {
 
 
                     // Detach when needed.
-                    if (token.IsCancellationRequested || Process.HasExited) Detach();
+                    if (token.IsCancellationRequested || Process.HasExited) {
+                        Detach();
+                        if (Process.HasExited) OnProcessExited();
+                    }
                 }
             });
         }
@@ -111,11 +117,17 @@ namespace DebugNET {
         }
 
         private void HandleDebugEvent(ref DebugEvent debugEvent) {
-            Console.WriteLine(debugEvent.DebugEventCode);
-
             switch (debugEvent.DebugEventCode) {
-                case DebugEventType.EXCEPTION_DEBUG_EVENT:
+                case DebugEventType.CREATE_PROCESS_DEBUG_EVENT:
+                    break;
 
+                case DebugEventType.LOAD_DLL_DEBUG_EVENT:
+                    break;
+
+                case DebugEventType.CREATE_THREAD_DEBUG_EVENT:
+                    break;
+
+                case DebugEventType.EXCEPTION_DEBUG_EVENT:
                     switch (debugEvent.Exception.ExceptionRecord.Code) {
                         case EXCEPTION_BREAKPOINT:
                             break;
@@ -125,12 +137,40 @@ namespace DebugNET {
                     }
 
                     break;
+
+                case DebugEventType.EXIT_THREAD_DEBUG_EVENT:
+                    break;
+
+                case DebugEventType.EXIT_PROCESS_DEBUG_EVENT:
+                    break;
+
                 default:
                     break;
             }
         }
 
 
+
+        public void SuspendProcess(Process process) {
+            foreach (ProcessThread thread in process.Threads) {
+                IntPtr handle = Kernel32.OpenThread(ThreadAccess.SUSPEND_RESUME, false, thread.Id);
+
+                if (handle == IntPtr.Zero) continue;
+
+                Kernel32.SuspendThread(handle);
+                Kernel32.CloseHandle(handle);
+            }
+        }
+        public void ResumeProcess(Process process) {
+            foreach (ProcessThread thread in process.Threads) {
+                IntPtr handle = Kernel32.OpenThread(ThreadAccess.SUSPEND_RESUME, false, thread.Id);
+
+                if (handle == IntPtr.Zero) continue;
+
+                Kernel32.ResumeThread(handle);
+                Kernel32.CloseHandle(handle);
+            }
+        }
 
         public IntPtr AllocateMemory(int size = 4096) {
             return Kernel32.VirtualAllocEx(ProcessHandle, IntPtr.Zero, (uint)size, AllocationType.MEM_COMMIT | AllocationType.MEM_RESERVE, MemoryProtection.PAGE_EXECUTE_READWRITE);
@@ -233,6 +273,45 @@ namespace DebugNET {
             return address;
         }
 
+        /// <summary>Searches for the address of a byte pattern in a module.</summary>
+        /// <param name="moduleName">Name of the module</param>
+        /// <param name="data">Pattern to look for.</param>
+        /// <returns>Address starting with the first entry of the pattern</returns>
+        /// <exception cref="ArgumentNullException">modulename or data</exception>
+        /// <exception cref="ArgumentException">empty data</exception>
+        public IntPtr Seek(string moduleName, params byte[] data) {
+            if (string.IsNullOrEmpty(moduleName)) throw new ArgumentNullException("moduleName");
+            else if (data == null) throw new ArgumentNullException("data");
+            else if (data.Length == 0) throw new ArgumentException("Empty data");
+
+
+            ProcessModule module = FindModule(moduleName);
+            if (module == null) return IntPtr.Zero;
+
+
+            for (int i = 0; i < module.ModuleMemorySize; i++) {
+                IntPtr address = module.BaseAddress + i;
+
+                // Check if first byte is equal
+                if (ReadByte(address) == data[0]) {
+                    // Return if only one byte long
+                    if (data.Length == 1) return address;
+
+                    // Check if data is in the module's memory
+                    if (i + data.Length >= module.ModuleMemorySize) return IntPtr.Zero;
+
+                    // Read following N-1 bytes and compare
+                    for (int j = 1; j < data.Length; j++) {
+                        IntPtr address2 = address + j;
+
+                        if (ReadByte(address2) != data[j]) break;
+                        else if (j + 1 == data.Length) return address;
+                    }
+                }
+            }
+
+            return IntPtr.Zero;
+        }
 
         /// <summary>Returns the first module that matches the name.</summary>
         /// <param name="name">Name of the module.</param>
@@ -475,6 +554,12 @@ namespace DebugNET {
             OnDetached(EventArgs.Empty);
         }
         protected virtual void OnDetached(EventArgs e) { }
+
+        private void OnProcessExited(/* TODO parameters for custom EventArgs */) {
+            ProcessExited?.Invoke(this, EventArgs.Empty);
+            OnProcessExited(EventArgs.Empty);
+        }
+        protected virtual void OnProcessExited(EventArgs e) { }
         #endregion
 
         #region IDisposable

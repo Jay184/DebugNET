@@ -39,10 +39,11 @@ namespace DebugNET {
             Debugger = debugger;
             Address = address;
 
-            OldInstruction = debugger.ReadByte(Address);
+            if (debugger != null) OldInstruction = debugger.ReadByte(Address);
         }
 
-
+        public Breakpoint() {
+        }
 
         internal protected virtual void OnHit(BreakpointEventArgs e) {
             Hit?.Invoke(Debugger, e);

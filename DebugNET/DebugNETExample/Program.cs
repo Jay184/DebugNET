@@ -20,17 +20,16 @@ namespace DebugNETExample {
                 using (Debugger2 debugger = new Debugger2(process)) {
                     debugger.Attached += (sender, e) => Console.WriteLine("Attached!");
                     debugger.Detached += (sender, e) => Console.WriteLine("Detached!");
+                    debugger.ProcessExited += (sender, e) => Console.WriteLine("Process exited!");
 
                     IntPtr opcodeAddress = debugger.GetAddress($"\"{ name }.exe\"+13BD8");
+                    IntPtr seeked = debugger.Seek($"{ name }.exe", 0x89, 0x45, 0xD0);
 
                     using (CancellationTokenSource tokenSource = new CancellationTokenSource()) {
                         // Attaching to the process
                         Task listener = debugger.AttachAsync(tokenSource.Token);
-                        //tokenSource.CancelAfter(3000); // Will happen automatically when disposed.
-
-                        //listener.Wait();
-
-                        Thread.Sleep(3000);
+                        tokenSource.Cancel(); // Will happen automatically when disposed.
+                        listener.Wait();
                     }
                 }
             } catch (ProcessNotFoundException) {
@@ -44,7 +43,7 @@ namespace DebugNETExample {
             }
 
             Console.WriteLine("Done.");
-            Console.ReadLine();
+            Console.ReadKey();
             return;
 
             /*

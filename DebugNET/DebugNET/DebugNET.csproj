@@ -42,6 +42,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Breakpoint.cs" />
+    <Compile Include="BreakpointCollection.cs" />
     <Compile Include="BreakpointEventArgs.cs" />
     <Compile Include="Debugger.cs" />
     <Compile Include="Debugger2.cs" />
