@@ -13,28 +13,25 @@ namespace DebugNETExample {
         [STAThread]
         static void Main() {
             const string name = "DebugeeProgram";
-            Process process = Process.GetProcessesByName(name)[0];
+            Process[] processes = Process.GetProcessesByName(name);
+            Process process = processes.Length > 0 ? processes[0] : null;
 
             try {
                 using (Debugger2 debugger = new Debugger2(process)) {
                     debugger.Attached += (sender, e) => Console.WriteLine("Attached!");
                     debugger.Detached += (sender, e) => Console.WriteLine("Detached!");
 
-                    IntPtr opcodeAddress = debugger.GetAddress("\"DebugeeProgram.exe\"+13BD8");
+                    IntPtr opcodeAddress = debugger.GetAddress($"\"{ name }.exe\"+13BD8");
 
-                    
                     using (CancellationTokenSource tokenSource = new CancellationTokenSource()) {
                         // Attaching to the process
                         Task listener = debugger.AttachAsync(tokenSource.Token);
+                        //tokenSource.CancelAfter(3000); // Will happen automatically when disposed.
 
-                        Thread.Sleep(1000);
+                        //listener.Wait();
 
-                        debugger.Detach(); // Will happen automatically when disposed.
-                        listener.Wait();
-                        Console.WriteLine("Listener ended");
+                        Thread.Sleep(3000);
                     }
-
-                    debugger.Process.WaitForExit();
                 }
             } catch (ProcessNotFoundException) {
                 Console.WriteLine("Cannot create debugger. Process not found");
@@ -42,8 +39,12 @@ namespace DebugNETExample {
                 throw ex.InnerException; // Could be anything
             } catch (OperationCanceledException) {
                 Console.WriteLine("Listener was canceled");
+            } catch (AttachException ex) {
+                Console.WriteLine(ex.Message);
             }
 
+            Console.WriteLine("Done.");
+            Console.ReadLine();
             return;
 
             /*

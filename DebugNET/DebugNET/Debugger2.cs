@@ -15,6 +15,7 @@ namespace DebugNET {
         protected const uint EXCEPTION_BREAKPOINT = 0x80000003;
         protected const uint EXCEPTION_SINGLE_STEP = 0x80000004;
         protected const string OFFSETPATTERN = @"(\+|\-)?(?:0x)?([a-fA-F0-9]{1,8})";
+        private const ContinueStatus CONTINUESTATUS = ContinueStatus.DBG_CONTINUE;
         private const ProcessAccessFlags ACCESS =
                     ProcessAccessFlags.CREATE_THREAD |
                     ProcessAccessFlags.QUERY_INFORMATION |
@@ -22,6 +23,7 @@ namespace DebugNET {
                     ProcessAccessFlags.VM_READ |
                     ProcessAccessFlags.VM_WRITE |
                     ProcessAccessFlags.SYNCHRONIZE;
+        private const int DEBUGTIMEOUT = 500;
 
 
         // TODO custom eventhandlers
@@ -66,40 +68,66 @@ namespace DebugNET {
         public async Task AttachAsync(CancellationToken token) {
             if (IsAttached) throw new AttachException("Cannot attach twice.");
 
-            // TODO check remote debugging and throw if true
+            bool isBeingDebugged = false;
+            bool hasChecked = Kernel32.CheckRemoteDebuggerPresent(ProcessHandle, ref isBeingDebugged);
+            if (hasChecked && isBeingDebugged) throw new AttachException("Process already being debugged.");
 
-            // Start debugging
-            if (Kernel32.DebugActiveProcess(Process.Id)) {
-                IsAttached = true;
-                OnAttached();
-            }
+            await Task.Run(() => {
+                // Start debugging (This has to happen on the same thread.)
+                if (Kernel32.DebugActiveProcess(Process.Id)) {
+                    Kernel32.DebugSetProcessKillOnExit(false);
+                    IsAttached = true;
+                    OnAttached();
+                }
 
-            while (IsAttached) {
-                await DebuggingLoop(token);
-            }
+                while (IsAttached) {
+                    DebugEvent debugEvent = new DebugEvent();
+
+
+                    // Wait for debug event
+                    if (Kernel32.WaitForDebugEvent(ref debugEvent, DEBUGTIMEOUT)) {
+                        HandleDebugEvent(ref debugEvent);
+                        Kernel32.ContinueDebugEvent(debugEvent.ProcessId, debugEvent.ThreadId, CONTINUESTATUS);
+
+                    }
+
+
+                    // Detach when needed.
+                    if (token.IsCancellationRequested || Process.HasExited) Detach();
+                }
+            });
         }
         /// <summary>Detaches the debugger from the process.</summary>
         /// <exception cref="AttachException">When not attached.</exception>
-        public void Detach() {
-            if (!IsAttached) throw new AttachException("Cannot detach twice.");
+        private void Detach() {
+            if (!IsAttached) throw new AttachException("Debugger is not attached.");
 
             if (Kernel32.DebugActiveProcessStop(Process.Id)) {
+                // TODO this will never be called (unless the CancellationToken is cancelled) because DebugActiveProcessStop is called from a different thread and will return ERROR_ACCESS_DENIED (0x05)
                 OnDetached();
             }
 
             IsAttached = false;
         }
 
-        protected virtual async Task DebuggingLoop(CancellationToken token) {
-            Console.WriteLine("Debugging");
+        private void HandleDebugEvent(ref DebugEvent debugEvent) {
+            Console.WriteLine(debugEvent.DebugEventCode);
 
-            if (token.IsCancellationRequested) {
-                Console.WriteLine("Task {0} cancelled");
-                Detach();
-                token.ThrowIfCancellationRequested();
+            switch (debugEvent.DebugEventCode) {
+                case DebugEventType.EXCEPTION_DEBUG_EVENT:
+
+                    switch (debugEvent.Exception.ExceptionRecord.Code) {
+                        case EXCEPTION_BREAKPOINT:
+                            break;
+
+                        case EXCEPTION_SINGLE_STEP:
+                            break;
+                    }
+
+                    break;
+                default:
+                    break;
             }
-
-            await Task.Delay(100);
         }
 
 
@@ -134,6 +162,7 @@ namespace DebugNET {
             uint exitCode = await thread;
             return exitCode;
         }
+
 
 
         /// <summary>Returns the address to a string.</summary>
@@ -463,7 +492,11 @@ namespace DebugNET {
 
             Kernel32.CloseHandle(ProcessHandle);
             ProcessHandle = IntPtr.Zero;
-            Process = null;
+
+            if (!disposing) {
+                // Only destructor
+                Process = null;
+            }
 
             isDisposed = true;
         }

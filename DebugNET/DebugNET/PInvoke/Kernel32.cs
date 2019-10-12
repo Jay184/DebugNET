@@ -80,6 +80,13 @@ namespace DebugNET.PInvoke {
         [return: MarshalAs(UnmanagedType.Bool)]
         internal static extern bool ContinueDebugEvent(int dwProcessId, int dwThreadId, ContinueStatus dwContinueStatus);
 
+        /// <summary>Sets the action to be performed when the calling thread exits.</summary>
+        /// <param name="killOnExit">If this parameter is TRUE, the thread terminates all attached processes on exit (note that this is the default). Otherwise, the thread detaches from all processes being debugged on exit.</param>
+        /// <returns>If the function succeeds, the return value is nonzero; otherwise, it is zero.</returns>
+        [DllImport("kernel32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool DebugSetProcessKillOnExit(bool killOnExit);
+
 
         /// <summary>Suspends the specified thread.</summary>
         /// <param name="hThread">A handle to the thread that is to be suspended. The handle must have the THREAD_SUSPEND_RESUME access right.</param>
