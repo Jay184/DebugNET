@@ -95,10 +95,13 @@ namespace DebugNET {
 
             while (IsAttached) {
                 DebugEvent debugEvent = new DebugEvent();
+                SuspendProcess(Process);
+
+                // Stop when client stops the debugger.
+                if (( token.IsCancellationRequested && lastEvent == null ) || Process.HasExited) break;
 
                 // Wait for debug event
-                if (Kernel32.WaitForDebugEvent(ref debugEvent, DEBUGTIMEOUT)) {
-                    SuspendProcess(Process);
+                if (Kernel32.WaitForDebugEvent(ref debugEvent, DEBUGTIMEOUT * 0)) {
                     #region Handle debug event
                     switch (debugEvent.DebugEventCode) {
                         case DebugEventType.CREATE_PROCESS_DEBUG_EVENT:
@@ -126,8 +129,8 @@ namespace DebugNET {
 
                     // Stop when client stops the debugger.
                     if (( token.IsCancellationRequested && lastEvent == null ) || Process.HasExited) break;
-                    ResumeProcess(Process);
                 }
+                ResumeProcess(Process);
             }
 
 
