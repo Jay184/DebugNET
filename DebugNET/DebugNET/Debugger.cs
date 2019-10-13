@@ -126,7 +126,7 @@ namespace DebugNET {
             BreakpointEventArgs lastBreakpoint = null;
 
             while (Listening) {
-                // Wait for debuggee's debug event, timeout = 0.5 seconds
+                // Wait for debuggee's debug event, timeout = 1s
                 DebugEvent debugEvent = new DebugEvent();
                 bool success = Kernel32.WaitForDebugEvent(ref debugEvent, 1000);
 
@@ -163,7 +163,7 @@ namespace DebugNET {
                         Kernel32.GetThreadContext(threadHandle, ref context);
 
                         // Trigger event
-                        BreakpointEventArgs eventArgs = new BreakpointEventArgs(context, debugEvent, breakpoint);
+                        BreakpointEventArgs eventArgs = new BreakpointEventArgs(null, null, debugEvent, context);
                         breakpoint.OnHit(eventArgs);
 
                         // Prepare for breakpoint reactivation
@@ -179,9 +179,9 @@ namespace DebugNET {
                     } else if (errorCode == EXCEPTION_SINGLE_STEP) {
 
                         // Instruction right after breakpoint
-                        if (lastBreakpoint != null && !lastBreakpoint.Disable) {
-                            lastBreakpoint.Breakpoint.Enable();
-                        }
+                        //if (lastBreakpoint != null && !lastBreakpoint.Disable) {
+                            //lastBreakpoint.Breakpoint.Enable();
+                        //}
                         lastBreakpoint = null;
                     }
                 }

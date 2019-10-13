@@ -23,7 +23,13 @@ namespace DebugNET {
                     ProcessAccessFlags.VM_READ |
                     ProcessAccessFlags.VM_WRITE |
                     ProcessAccessFlags.SYNCHRONIZE;
-        private const int DEBUGTIMEOUT = 500;
+        private const ThreadAccess THREADACCESS =
+                    ThreadAccess.GET_CONTEXT |
+                    ThreadAccess.SET_CONTEXT;
+        private const ContextFlags CONTEXTFLAGS =
+                    ContextFlags.CONTEXT_CONTROL |
+                    ContextFlags.CONTEXT_INTEGER;
+        private const int DEBUGTIMEOUT = 1000;
 
 
         // TODO custom eventhandlers
@@ -39,6 +45,7 @@ namespace DebugNET {
 
 
         private bool isDisposed;
+        private BreakpointEventArgs lastEvent;
 
 
 
@@ -52,7 +59,7 @@ namespace DebugNET {
                 new InvalidOperationException("Cannot get Process handle."));
 
             ProcessHandle = handle;
-            Breakpoints = new BreakpointCollection();
+            Breakpoints = new BreakpointCollection(this);
         }
 
 
@@ -75,77 +82,144 @@ namespace DebugNET {
             bool hasChecked = Kernel32.CheckRemoteDebuggerPresent(ProcessHandle, ref isBeingDebugged);
             if (hasChecked && isBeingDebugged) throw new AttachException("Process already being debugged.");
 
-            await Task.Run(() => {
-                // Start debugging (This has to happen on the same thread.)
-                if (Kernel32.DebugActiveProcess(Process.Id)) {
-                    Kernel32.DebugSetProcessKillOnExit(false);
-                    IsAttached = true;
-                    OnAttached();
-                }
-
-                while (IsAttached) {
-                    DebugEvent debugEvent = new DebugEvent();
-
-
-                    // Wait for debug event
-                    if (Kernel32.WaitForDebugEvent(ref debugEvent, DEBUGTIMEOUT)) {
-                        HandleDebugEvent(ref debugEvent);
-                        Kernel32.ContinueDebugEvent(debugEvent.ProcessId, debugEvent.ThreadId, CONTINUESTATUS);
-
-                    }
-
-
-                    // Detach when needed.
-                    if (token.IsCancellationRequested || Process.HasExited) {
-                        Detach();
-                        if (Process.HasExited) OnProcessExited();
-                    }
-                }
-            });
+            await Task.Run(() => DebuggingLoop(token));
         }
-        /// <summary>Detaches the debugger from the process.</summary>
-        /// <exception cref="AttachException">When not attached.</exception>
-        private void Detach() {
-            if (!IsAttached) throw new AttachException("Debugger is not attached.");
 
-            if (Kernel32.DebugActiveProcessStop(Process.Id)) {
-                // TODO this will never be called (unless the CancellationToken is cancelled) because DebugActiveProcessStop is called from a different thread and will return ERROR_ACCESS_DENIED (0x05)
-                OnDetached();
+        private void DebuggingLoop(CancellationToken token) {
+            // Start debugging (This has to happen on the same thread.)
+            if (Kernel32.DebugActiveProcess(Process.Id)) {
+                Kernel32.DebugSetProcessKillOnExit(false);
+                IsAttached = true;
+                OnAttached();
             }
 
-            IsAttached = false;
-        }
+            while (IsAttached) {
+                DebugEvent debugEvent = new DebugEvent();
 
-        private void HandleDebugEvent(ref DebugEvent debugEvent) {
-            switch (debugEvent.DebugEventCode) {
-                case DebugEventType.CREATE_PROCESS_DEBUG_EVENT:
-                    break;
-
-                case DebugEventType.LOAD_DLL_DEBUG_EVENT:
-                    break;
-
-                case DebugEventType.CREATE_THREAD_DEBUG_EVENT:
-                    break;
-
-                case DebugEventType.EXCEPTION_DEBUG_EVENT:
-                    switch (debugEvent.Exception.ExceptionRecord.Code) {
-                        case EXCEPTION_BREAKPOINT:
+                // Wait for debug event
+                if (Kernel32.WaitForDebugEvent(ref debugEvent, DEBUGTIMEOUT)) {
+                    #region Handle debug event
+                    switch (debugEvent.DebugEventCode) {
+                        case DebugEventType.CREATE_PROCESS_DEBUG_EVENT:
+                            OnCreateProcess(ref debugEvent);
                             break;
-
-                        case EXCEPTION_SINGLE_STEP:
+                        case DebugEventType.LOAD_DLL_DEBUG_EVENT:
+                            OnLoadDLL(ref debugEvent);
+                            break;
+                        case DebugEventType.CREATE_THREAD_DEBUG_EVENT:
+                            OnCreateThread(ref debugEvent);
+                            break;
+                        case DebugEventType.EXCEPTION_DEBUG_EVENT:
+                            OnException(ref debugEvent);
+                            break;
+                        case DebugEventType.EXIT_THREAD_DEBUG_EVENT:
+                            OnExitThread(ref debugEvent);
+                            break;
+                        case DebugEventType.EXIT_PROCESS_DEBUG_EVENT:
+                            OnExitProcess(ref debugEvent);
                             break;
                     }
+                    #endregion
 
-                    break;
+                    bool yes = Kernel32.ContinueDebugEvent(debugEvent.ProcessId, debugEvent.ThreadId, CONTINUESTATUS);
+                    ;
+                }
 
-                case DebugEventType.EXIT_THREAD_DEBUG_EVENT:
-                    break;
+                // Stop when client stops the debugger.
+                if (( token.IsCancellationRequested && lastEvent == null ) || Process.HasExited) break;
+            }
 
-                case DebugEventType.EXIT_PROCESS_DEBUG_EVENT:
-                    break;
 
-                default:
+            // Stop when process exited.
+            if (Process.HasExited) {
+                IsAttached = false;
+                OnProcessExited();
+                OnDetached();
+                return;
+            }
+
+            // Disable all breakpoints
+            foreach (var item in Breakpoints) {
+                if (item.Value.Enabled) item.Value.Disable(this, item.Key);
+            }
+
+            // Stop debugging
+            if (Kernel32.DebugActiveProcessStop(Process.Id)) {
+                IsAttached = false;
+                OnDetached();
+            }
+        }
+
+        private void OnCreateProcess(ref DebugEvent debugEvent) { }
+        private void OnLoadDLL(ref DebugEvent debugEvent) { }
+        private void OnCreateThread(ref DebugEvent debugEvent) { }
+        private void OnException(ref DebugEvent debugEvent) {
+            switch (debugEvent.Exception.ExceptionRecord.Code) {
+                case EXCEPTION_BREAKPOINT:
+                    OnBreakpoint(ref debugEvent);
                     break;
+                case EXCEPTION_SINGLE_STEP:
+                    OnSingleStep(ref debugEvent);
+                    break;
+            }
+        }
+        private void OnExitThread(ref DebugEvent debugEvent) { }
+        private void OnExitProcess(ref DebugEvent debugEvent) { }
+
+        private void OnBreakpoint(ref DebugEvent debugEvent) {
+            IntPtr address = debugEvent.Exception.ExceptionRecord.Address;
+
+            if (Breakpoints.TryGetValue(address, out Breakpoint2 breakpoint)) {
+                // Breakpoint was set at this address
+
+                // Get Context
+                Context context = new Context() { ContextFlags = CONTEXTFLAGS };
+                IntPtr threadHandle = Kernel32.OpenThread(THREADACCESS, false, debugEvent.ThreadId);
+                Kernel32.GetThreadContext(threadHandle, ref context);
+                context.Eip = (uint)address; // Re-execute the instruction where the exception occured.
+                BreakpointEventArgs eventArgs = new BreakpointEventArgs(this, breakpoint, debugEvent, context);
+
+                if (breakpoint.Condition == null || breakpoint.Condition(eventArgs)) {
+                    // Condition met. Trigger event.
+                    breakpoint.OnHit(eventArgs);
+                    context = eventArgs.Context;
+
+                    if (breakpoint.Enabled) {
+                        // Breakpoint is still active, set up to re-enable on the next instruction.
+                        breakpoint.Disable(this, address);
+                        lastEvent = eventArgs;
+                        context.EFlags |= 0x100; // Trap Flag, single step instruction (Enable breakpoint on next instruction).
+                        //WriteByte(address, breakpoint.Instruction);
+                    }
+
+                    //DebugEvent evt = new DebugEvent();
+                    //Kernel32.SetThreadContext(threadHandle, ref context);
+                    //Kernel32.CloseHandle(threadHandle);
+                    //Kernel32.ContinueDebugEvent(debugEvent.ProcessId, debugEvent.ThreadId, CONTINUESTATUS);
+                    //Kernel32.WaitForDebugEvent(ref evt, Kernel32.INFINITE);
+
+                    //if (evt.DebugEventCode == (DebugEventType)0x01 && evt.Exception.ExceptionRecord.Code == 0x80000004) {
+                    //    WriteByte(address, 0xCC);
+                    //}
+                    //return;
+
+                } else {
+                    // Condition failed, set up to re-enable on the next instruction.
+                    lastEvent = eventArgs;
+                    context.EFlags |= 0x100; // Single step instruction (Enable breakpoint on next instruction).
+
+                }
+
+
+                // Set Context back
+                Kernel32.SetThreadContext(threadHandle, ref context);
+                Kernel32.CloseHandle(threadHandle);
+            }
+        }
+        private void OnSingleStep(ref DebugEvent debugEvent) {
+            if (lastEvent != null) {
+                lastEvent.Breakpoint.Enable(this, lastEvent.Address);
+                lastEvent = null;
             }
         }
 
@@ -573,7 +647,9 @@ namespace DebugNET {
             if (isDisposed) return;
 
             // TODO release resources
-            if (IsAttached) Detach();
+            if (IsAttached) {
+                IsAttached = false;
+            }
 
             Kernel32.CloseHandle(ProcessHandle);
             ProcessHandle = IntPtr.Zero;

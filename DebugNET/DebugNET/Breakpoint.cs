@@ -1,6 +1,51 @@
 ﻿using System;
 
 namespace DebugNET {
+    public class Breakpoint2 {
+        public event EventHandler<BreakpointEventArgs> Hit;
+
+
+        public Func<BreakpointEventArgs, bool> Condition { get; set; }
+
+        public bool Enabled { get; internal set; }
+        public byte Instruction { get; internal set; }
+        
+
+        // TODO refactor Breakpoint here
+
+        internal Breakpoint2(byte instruction) {
+            Instruction = instruction;
+        }
+
+
+
+        /// <summary>
+        /// Enables the breakpoint.
+        /// </summary>
+        public bool Enable(Debugger2 debugger, IntPtr address) {
+            if (Enabled) return false;
+
+            debugger.WriteByte(address, 0xCC);
+            Enabled = true;
+            return true;
+        }
+        /// <summary>
+        /// Disables the breakpoint.
+        /// </summary>
+        public bool Disable(Debugger2 debugger, IntPtr address) {
+            if (!Enabled) return false;
+
+            debugger.WriteByte(address, Instruction);
+            Enabled = false;
+            return true;
+        }
+
+        internal protected virtual void OnHit(BreakpointEventArgs e) {
+            Hit?.Invoke(this, e);
+        }
+    }
+
+
     /// <summary>
     /// Represents a breakpoint, used by debuggers to halt at a specific point in the execution of their debuggee.
     /// </summary>
@@ -24,6 +69,7 @@ namespace DebugNET {
         /// <para>Note that using several breakpoints at the same address should not be permitted.</para>
         /// </summary>
         private readonly byte OldInstruction;
+
         /// <summary>
         /// Reference to the debugger instance used to write to the memory
         /// </summary>
@@ -42,8 +88,6 @@ namespace DebugNET {
             if (debugger != null) OldInstruction = debugger.ReadByte(Address);
         }
 
-        public Breakpoint() {
-        }
 
         internal protected virtual void OnHit(BreakpointEventArgs e) {
             Hit?.Invoke(Debugger, e);
