@@ -98,6 +98,7 @@ namespace DebugNET {
 
                 // Wait for debug event
                 if (Kernel32.WaitForDebugEvent(ref debugEvent, DEBUGTIMEOUT)) {
+                    SuspendProcess(Process);
                     #region Handle debug event
                     switch (debugEvent.DebugEventCode) {
                         case DebugEventType.CREATE_PROCESS_DEBUG_EVENT:
@@ -121,12 +122,12 @@ namespace DebugNET {
                     }
                     #endregion
 
-                    bool yes = Kernel32.ContinueDebugEvent(debugEvent.ProcessId, debugEvent.ThreadId, CONTINUESTATUS);
-                    ;
-                }
+                    Kernel32.ContinueDebugEvent(debugEvent.ProcessId, debugEvent.ThreadId, CONTINUESTATUS);
 
-                // Stop when client stops the debugger.
-                if (( token.IsCancellationRequested && lastEvent == null ) || Process.HasExited) break;
+                    // Stop when client stops the debugger.
+                    if (( token.IsCancellationRequested && lastEvent == null ) || Process.HasExited) break;
+                    ResumeProcess(Process);
+                }
             }
 
 
@@ -148,6 +149,8 @@ namespace DebugNET {
                 IsAttached = false;
                 OnDetached();
             }
+
+            ResumeProcess(Process);
         }
 
         private void OnCreateProcess(ref DebugEvent debugEvent) { }
@@ -184,30 +187,18 @@ namespace DebugNET {
                     breakpoint.OnHit(eventArgs);
                     context = eventArgs.Context;
 
-                    if (breakpoint.Enabled) {
+                    if (breakpoint.Enabled /* && EIP unchanged */) {
                         // Breakpoint is still active, set up to re-enable on the next instruction.
-                        breakpoint.Disable(this, address);
                         lastEvent = eventArgs;
                         context.EFlags |= 0x100; // Trap Flag, single step instruction (Enable breakpoint on next instruction).
-                        //WriteByte(address, breakpoint.Instruction);
+                        WriteByte(address, breakpoint.Instruction);
                     }
-
-                    //DebugEvent evt = new DebugEvent();
-                    //Kernel32.SetThreadContext(threadHandle, ref context);
-                    //Kernel32.CloseHandle(threadHandle);
-                    //Kernel32.ContinueDebugEvent(debugEvent.ProcessId, debugEvent.ThreadId, CONTINUESTATUS);
-                    //Kernel32.WaitForDebugEvent(ref evt, Kernel32.INFINITE);
-
-                    //if (evt.DebugEventCode == (DebugEventType)0x01 && evt.Exception.ExceptionRecord.Code == 0x80000004) {
-                    //    WriteByte(address, 0xCC);
-                    //}
-                    //return;
 
                 } else {
                     // Condition failed, set up to re-enable on the next instruction.
                     lastEvent = eventArgs;
                     context.EFlags |= 0x100; // Single step instruction (Enable breakpoint on next instruction).
-
+                    WriteByte(address, breakpoint.Instruction);
                 }
 
 
@@ -218,7 +209,9 @@ namespace DebugNET {
         }
         private void OnSingleStep(ref DebugEvent debugEvent) {
             if (lastEvent != null) {
-                lastEvent.Breakpoint.Enable(this, lastEvent.Address);
+                //lastEvent.Breakpoint.Enable(this, lastEvent.Address);
+
+                WriteByte(lastEvent.Address, 0xCC);
                 lastEvent = null;
             }
         }

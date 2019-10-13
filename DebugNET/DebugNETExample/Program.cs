@@ -30,8 +30,8 @@ namespace DebugNETExample {
                             // Attaching to the process
                             Task listener = debugger.AttachAsync(tokenSource.Token);
 
-                            Breakpoint2 breakpoint = debugger.Breakpoints.Get(opcodeAddress);
-                            breakpoint.Hit += (sender, e) => { Console.WriteLine(e.Context.Eax); };
+                            //Breakpoint2 breakpoint = debugger.Breakpoints.Get(opcodeAddress);
+                            //breakpoint.Hit += (sender, e) => { Console.WriteLine(e.Context.Eax); };
                             //breakpoint.Condition = e => e.Context.Eax < 1024;
                             //breakpoint.Enable(debugger, opcodeAddress);
 
