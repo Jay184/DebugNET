@@ -53,7 +53,7 @@ namespace DebugNET {
             if (processes.Length > 0) {
                 // TODO filter for unsuspended and not exited processes and take first
                 Process = processes[0];
-                IntPtr handle = Kernel32.OpenProcess(ACCESS, false, process.Id);
+                IntPtr handle = Kernel32.OpenProcess(ACCESS, false, processes[0].Id);
 
                 if (handle == IntPtr.Zero) throw new ProcessNotFoundException("Cannot open the process.",
                     new InvalidOperationException("Cannot get Process handle."));
