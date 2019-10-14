@@ -3,106 +3,103 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using DebugNET;
-using DebugNET.PInvoke;
+
+// Avoid conflict with .Net Debugger class in System.Diagnostics
+using Debugger = DebugNET.Debugger;
 
 namespace DebugNETExample {
-    static class Program {
+    public static class Program {
+        public const string name = "DebugeeProgram";
+
         /// <summary>
-        /// The main entry point for the application.
+        /// <para>The main entry point for the application.</para>
+        /// <para>This method demonstrates the usage of the debugger.</para>
         /// </summary>
         [STAThread]
-        static void Main() {
-            const string name = "DebugeeProgram";
+        public static void Main() {
+            // Get process instance.
             Process[] processes = Process.GetProcessesByName(name);
             Process process = processes.Length > 0 ? processes[0] : null;
 
-            if (process == null) {
-                process = Process.Start(@"D:\Programming\C#\!repos\DebugNET\DebugNET\Debug\DebugeeProgram.exe");
-            }
+            // Start the process when not running.
+            if (process == null) process = Process.Start($"{ name }.exe");
+
 
             try {
-                while (process != null && !process.HasExited) {
-                    using (DebugNET.Debugger debugger = new DebugNET.Debugger(process)) {
-                        debugger.Attached += (sender, e) => Console.WriteLine($"Attached to { e.Process.ProcessName }!");
-                        debugger.Detached += (sender, e) => Console.WriteLine($"Detached from { e.Process.ProcessName }!");
-                        debugger.ProcessExited += (sender, e) => Console.WriteLine($"{ e.Process.ProcessName } exited!");
-                        
-                        IntPtr opcodeAddress = debugger.Seek($"{ name }.exe", 0x89, 0x45, 0xD0);
+                // Using statement to take care of disposing the debugger.
+                using (Debugger debugger = new Debugger(process)) {
+                    // Register events.
+                    debugger.Attached += (sender, e) => Console.WriteLine($"Attached to { e.Process.ProcessName }!");
+                    debugger.Detached += (sender, e) => Console.WriteLine($"Detached from { e.Process.ProcessName }!");
+                    debugger.ProcessExited += (sender, e) => Console.WriteLine($"{ e.Process.ProcessName } exited!");
 
-                        using (CancellationTokenSource tokenSource = new CancellationTokenSource()) {
-                            // Attaching to the process
-                            Task listener = debugger.AttachAsync(tokenSource.Token);
+                    // Retrieve address by code.
+                    IntPtr codeAddress = debugger.Seek($"{ name }.exe", 0x89, 0x45, 0xD0);
 
-                            //debugger.Breakpoints.Add(opcodeAddress,
-                            //    (sender, e) => Console.WriteLine(e.Context.Eax),
-                            //    e => e.Context.Eax < 200);
+                    // Retrieve address by module-offset pair.
+                    IntPtr address = debugger.GetAddress($"\"{ name }.exe\"+13648");
 
-
-                            //tokenSource.CancelAfter(2000); // Will happen automatically when debugger is disposed.
-                            IntPtr handle = debugger.InjectLibrary("random.dll");
-                            //IntPtr seedAddr = debugger.GetFunctionAddress(handle, "seed_random");
-                            //IntPtr randomAddr = debugger.GetFunctionAddress(handle, "random");
-                            //debugger.FreeLibrary(handle);
-
-                            tokenSource.Cancel();
-                            listener.Wait();
-                        }
+                    // Resolving pointers should be wrapped in a try catch block.
+                    try {
+                        IntPtr invalidAddress = debugger.GetAddress(IntPtr.Zero);
+                    } catch (AccessViolationException) { // Cannot read pointer.
+                    } catch (ArgumentException) { // Provided an invalid pointer.
                     }
 
-                    Thread.Sleep(200);
-                }
-            } catch (ProcessNotFoundException) {
-                Console.WriteLine("Cannot create debugger. Process not found");
-            } catch (AggregateException ex) {
-                throw ex.InnerException; // Could be anything
-            } catch (OperationCanceledException) {
-                Console.WriteLine("Listener was canceled");
-            } catch (AttachException ex) {
-                Console.WriteLine(ex.Message);
-            }
+                    // Allocate memory in the process with rwx access.
+                    IntPtr memory = debugger.AllocateMemory();
+                    debugger.WriteByte(memory, 0xFF);
+                    debugger.FreeMemory(memory);
 
-            Console.WriteLine("Done.");
-            Console.ReadKey();
-            return;
+                    try {
+                        /*
+                        Listening can be wrapped in a DebugListener class with the following members:
+                            private CancellationTokenSource TokenSource;
+                            private DebugListener()
+                            public Task GetListener()
+                            public void Cancel()
+                            ~DebugListener()
+                        */
 
-            /*
-            try {
-                Debugger debugger = new Debugger(name);
-                IntPtr addr = debugger.Seek("DebugeeProgram.exe", 0x89, 0x45, 0xD0); // DebugeeProgram.exe+13BD8
-                Breakpoint breakpoint = debugger.SetBreakpoint(addr);
+                        // Using statement around a CancellationTokenSource
+                        using (CancellationTokenSource tokenSource = new CancellationTokenSource()) {
+                            // Attaching to the process.
+                            Task listener = debugger.AttachAsync(tokenSource.Token);
 
+                            if (debugger.IsAttached) {
+                                // Preferred way to create a breakpoint.
+                                debugger.Breakpoints.Add(codeAddress,
+                                (sender, e) => Console.WriteLine(e.Context.Eax),
+                                e => e.Context.Eax < 200);
 
-                if (breakpoint != null) {
-                    breakpoint.Hit += (sender, e) => {
-                        Debugger dbg = (Debugger)sender;
+                                // Loading a library in the process.
+                                IntPtr handle = debugger.InjectLibrary("random.dll");
+                                debugger.FreeRemoteLibrary(handle);
+                            }
 
-                        Console.Write($"> Received { e.Context.Eax } @ { e.Address.ToString("X8") }\r\n> Enter number: ");
-
-                        string input = Console.ReadLine();
-
-                        if (input.Equals("quit")) {
-                            dbg.StopListen();
-                            return;
+                            // Stopping the debugger.
+                            tokenSource.CancelAfter(2000);
+                            listener.Wait();
                         }
+                    } catch (AggregateException ex) {
+                        foreach (Exception exception in ex.InnerExceptions) {
 
-                        if (uint.TryParse(input, out uint newValue)) {
-                            IntPtr variableAddress = (IntPtr)(e.Context.Edx + 0x128);
-                            debugger.WriteUInt32(variableAddress, newValue);
+                            if (exception is AttachException) {
+                                // Cannot attach to process.
+                                Console.WriteLine(exception.Message);
 
-                            Context c = e.Context;
-                            c.Eax = newValue;
-                            e.Context = c;
+                            } else throw exception;
+
                         }
-                    };
+                    }
                 }
 
-                Task t = debugger.StartListen();
-                t.Wait();
-
+                Console.WriteLine("Done.");
+                Console.ReadKey();
             } catch (ProcessNotFoundException ex) {
-                Console.WriteLine(ex.Message);
+                Console.WriteLine($"Process cannot be found. { ex.InnerException.Message }");
+                Console.ReadKey();
             }
-            */
         }
     }
 }

@@ -79,6 +79,7 @@ namespace DebugNET {
 
             bool isBeingDebugged = false;
             bool hasChecked = Kernel32.CheckRemoteDebuggerPresent(ProcessHandle, ref isBeingDebugged);
+
             if (hasChecked && isBeingDebugged) throw new AttachException("Process already being debugged.");
 
             await Task.Run(() => DebuggingLoop(token));
@@ -103,6 +104,8 @@ namespace DebugNET {
 
                 // Wait for debug event
                 if (Kernel32.WaitForDebugEvent(ref debugEvent, 0)) {
+                    Process.Refresh();
+
                     #region Handle debug event
                     switch (debugEvent.DebugEventCode) {
                         case DebugEventType.CREATE_PROCESS_DEBUG_EVENT:
@@ -290,41 +293,22 @@ namespace DebugNET {
 
         delegate int random(int max);
         public IntPtr InjectLibrary(string file) {
-            // Allocate memory
-            // Write filepath into memory
-            // Get kernel32 module handle
-            // Get proc address of LoadLibraryA
-            // Run LoadLibrary in remote thread with pointer to filepath
+            IntPtr memory = AllocateMemory();
+            WriteText(memory, file, Encoding.ASCII);
 
-            /*
-            FARPROC GetProcAddress(
-                HMODULE hModule,
-                LPCSTR  lpProcName
-            );
-            */
+            IntPtr kernelHandle = Kernel32.GetModuleHandle("kernel32.dll");
+            IntPtr functionAddress = Kernel32.GetProcAddress(kernelHandle, "LoadLibraryA");
+            IntPtr remoteHandle = (IntPtr)CreateThread(functionAddress, memory);
 
-            IntPtr memory_start = AllocateMemory();
-            WriteText(memory_start, file, Encoding.ASCII);
-
-            IntPtr kernel_handle = Kernel32.GetModuleHandle("kernel32.dll");
-            IntPtr loadlibrary_address = Kernel32.GetProcAddress(kernel_handle, "LoadLibraryA");
-            IntPtr remote_module_handle = (IntPtr)CreateThread(loadlibrary_address, memory_start);
-
-            //WriteUInt32(memory_start, (uint)remote_module_handle);
-            //WriteText(memory_start + 4, "random", Encoding.UTF8);
-
-            //IntPtr getprocaddress_address = Kernel32.GetProcAddress(kernel_handle, "GetProcAddress");
-            //uint remote_random_address = CreateThread(getprocaddress_address, memory_start);
-
-            //random random_function = Marshal.GetDelegateForFunctionPointer<random>(remote_module_handle);
-            return remote_module_handle;
-
+            FreeMemory(memory);
+            return remoteHandle;
         }
-        public IntPtr GetFunctionAddress(IntPtr moduleHandle, string function) {
-            return Kernel32.GetProcAddress(moduleHandle, function);
-        }
-        public void FreeLibrary(IntPtr moduleHandle) {
-            Kernel32.FreeLibrary(moduleHandle);
+        public bool FreeRemoteLibrary(IntPtr moduleHandle) {
+            IntPtr kernelHandle = Kernel32.GetModuleHandle("kernel32.dll");
+            IntPtr functionAddress = Kernel32.GetProcAddress(kernelHandle, "FreeLibrary");
+            uint exitCode = CreateThread(functionAddress, moduleHandle);
+
+            return exitCode != 0;
         }
 
 
