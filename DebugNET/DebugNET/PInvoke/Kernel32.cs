@@ -247,7 +247,7 @@ namespace DebugNET.PInvoke {
         /// <param name="lpProcName">The function or variable name, or the function's ordinal value. If this parameter is an ordinal value, it must be in the low-order word; the high-order word must be zero.</param>
         /// <returns>If the function succeeds, the return value is the address of the exported function or variable; otherwise, it is NULL.</returns>
         [DllImport("kernel32", CharSet = CharSet.Ansi, ExactSpelling = true, SetLastError = true)]
-        internal static extern IntPtr GetProcAddress(IntPtr hModule, string lpProcName);
+        internal static extern IntPtr GetProcAddress(IntPtr hModule, [MarshalAs(UnmanagedType.LPStr)]string lpProcName);
 
         /// <summary>Retrieves the address of an exported function or variable from the specified dynamic-link library (DLL).</summary>
         /// <param name="hModule">A handle to the DLL module that contains the function or variable. The LoadLibrary, LoadLibraryEx, LoadPackagedLibrary, or GetModuleHandle function returns this handle.</param>

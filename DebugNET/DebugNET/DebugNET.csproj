@@ -41,11 +41,13 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ProcessExitedEventArgs.cs" />
+    <Compile Include="DetachedEventArgs.cs" />
     <Compile Include="Breakpoint.cs" />
     <Compile Include="BreakpointCollection.cs" />
+    <Compile Include="AttachedEventArgs.cs" />
     <Compile Include="BreakpointEventArgs.cs" />
     <Compile Include="Debugger.cs" />
-    <Compile Include="Debugger2.cs" />
     <Compile Include="PInvoke\ObjectWaitEvent.cs" />
     <Compile Include="PInvoke\ModuleHandleFlags.cs" />
     <Compile Include="PInvoke\LoadLibraryFlags.cs" />

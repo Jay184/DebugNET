@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DebugNETExample", "DebugNET
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DebugeeProgram", "DebugeeProgram\DebugeeProgram.vcxproj", "{4938DF23-0DCF-4B68-9006-ABDCD972C71B}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "random", "random\random.vcxproj", "{C15015CE-D90E-4009-BFB7-74FFAC0E2674}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -53,6 +55,16 @@ Global
 		{4938DF23-0DCF-4B68-9006-ABDCD972C71B}.Release|x64.Build.0 = Release|x64
 		{4938DF23-0DCF-4B68-9006-ABDCD972C71B}.Release|x86.ActiveCfg = Release|Win32
 		{4938DF23-0DCF-4B68-9006-ABDCD972C71B}.Release|x86.Build.0 = Release|Win32
+		{C15015CE-D90E-4009-BFB7-74FFAC0E2674}.Debug|Any CPU.ActiveCfg = Debug|Win32
+		{C15015CE-D90E-4009-BFB7-74FFAC0E2674}.Debug|x64.ActiveCfg = Debug|x64
+		{C15015CE-D90E-4009-BFB7-74FFAC0E2674}.Debug|x64.Build.0 = Debug|x64
+		{C15015CE-D90E-4009-BFB7-74FFAC0E2674}.Debug|x86.ActiveCfg = Debug|Win32
+		{C15015CE-D90E-4009-BFB7-74FFAC0E2674}.Debug|x86.Build.0 = Debug|Win32
+		{C15015CE-D90E-4009-BFB7-74FFAC0E2674}.Release|Any CPU.ActiveCfg = Release|Win32
+		{C15015CE-D90E-4009-BFB7-74FFAC0E2674}.Release|x64.ActiveCfg = Release|x64
+		{C15015CE-D90E-4009-BFB7-74FFAC0E2674}.Release|x64.Build.0 = Release|x64
+		{C15015CE-D90E-4009-BFB7-74FFAC0E2674}.Release|x86.ActiveCfg = Release|Win32
+		{C15015CE-D90E-4009-BFB7-74FFAC0E2674}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

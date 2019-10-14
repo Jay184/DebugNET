@@ -16,26 +16,35 @@ namespace DebugNETExample {
             Process[] processes = Process.GetProcessesByName(name);
             Process process = processes.Length > 0 ? processes[0] : null;
 
+            if (process == null) {
+                process = Process.Start(@"D:\Programming\C#\!repos\DebugNET\DebugNET\Debug\DebugeeProgram.exe");
+            }
+
             try {
                 while (process != null && !process.HasExited) {
-                    using (Debugger2 debugger = new Debugger2(process)) {
-                        debugger.Attached += (sender, e) => Console.WriteLine("Attached!");
-                        debugger.Detached += (sender, e) => Console.WriteLine("Detached!");
-                        debugger.ProcessExited += (sender, e) => Console.WriteLine("Process exited!");
-
-                        IntPtr opcodeAddress = debugger.GetAddress($"\"{ name }.exe\"+11D18");
-                        IntPtr seeked = debugger.Seek($"{ name }.exe", 0x89, 0x45, 0xD0);
+                    using (DebugNET.Debugger debugger = new DebugNET.Debugger(process)) {
+                        debugger.Attached += (sender, e) => Console.WriteLine($"Attached to { e.Process.ProcessName }!");
+                        debugger.Detached += (sender, e) => Console.WriteLine($"Detached from { e.Process.ProcessName }!");
+                        debugger.ProcessExited += (sender, e) => Console.WriteLine($"{ e.Process.ProcessName } exited!");
+                        
+                        IntPtr opcodeAddress = debugger.Seek($"{ name }.exe", 0x89, 0x45, 0xD0);
 
                         using (CancellationTokenSource tokenSource = new CancellationTokenSource()) {
                             // Attaching to the process
                             Task listener = debugger.AttachAsync(tokenSource.Token);
 
-                            Breakpoint2 breakpoint = debugger.Breakpoints.Get(opcodeAddress);
-                            //breakpoint.Hit += (sender, e) => { Console.WriteLine(e.Context.Eax); };
-                            //breakpoint.Condition = e => e.Context.Eax < 1024;
-                            //breakpoint.Enable(debugger, opcodeAddress);
+                            //debugger.Breakpoints.Add(opcodeAddress,
+                            //    (sender, e) => Console.WriteLine(e.Context.Eax),
+                            //    e => e.Context.Eax < 200);
 
-                            tokenSource.CancelAfter(2000); // Will happen automatically when debugger is disposed.
+
+                            //tokenSource.CancelAfter(2000); // Will happen automatically when debugger is disposed.
+                            IntPtr handle = debugger.InjectLibrary("random.dll");
+                            //IntPtr seedAddr = debugger.GetFunctionAddress(handle, "seed_random");
+                            //IntPtr randomAddr = debugger.GetFunctionAddress(handle, "random");
+                            //debugger.FreeLibrary(handle);
+
+                            tokenSource.Cancel();
                             listener.Wait();
                         }
                     }
@@ -53,7 +62,7 @@ namespace DebugNETExample {
             }
 
             Console.WriteLine("Done.");
-            //Console.ReadKey();
+            Console.ReadKey();
             return;
 
             /*
