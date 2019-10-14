@@ -48,6 +48,23 @@ namespace DebugNET {
 
 
 
+        public Debugger(string processName) {
+            Process[] processes = Process.GetProcessesByName(processName);
+            if (processes.Length > 0) {
+                // TODO filter for unsuspended and not exited processes and take first
+                Process = processes[0];
+                IntPtr handle = Kernel32.OpenProcess(ACCESS, false, process.Id);
+
+                if (handle == IntPtr.Zero) throw new ProcessNotFoundException("Cannot open the process.",
+                    new InvalidOperationException("Cannot get Process handle."));
+
+                ProcessHandle = handle;
+                Breakpoints = new BreakpointCollection(this);
+
+            } else throw new ProcessNotFoundException("Cannot find the process.",
+                new NullReferenceException("Process was null."));
+        }
+        public Debugger(int processID) : this(Process.GetProcessById(processID)) {}
         public Debugger(Process process) {
             Process = process ?? throw new ProcessNotFoundException("Cannot find the process.",
                 new NullReferenceException("Process was null."));
