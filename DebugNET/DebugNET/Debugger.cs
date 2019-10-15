@@ -29,8 +29,7 @@ namespace DebugNET {
                     ContextFlags.CONTEXT_INTEGER;
         private const int DEBUGTIMEOUT = 1000;
 
-
-        // TODO custom eventargs
+        
         public event EventHandler<AttachedEventArgs> Attached;
         public event EventHandler<DetachedEventArgs> Detached;
         public event EventHandler<ProcessExitedEventArgs> ProcessExited;
@@ -51,16 +50,25 @@ namespace DebugNET {
 
 
         public Debugger(string processName) {
+            WaitHandle = new AutoResetEvent(false);
+
             Process[] processes = Process.GetProcessesByName(processName);
             if (processes.Length > 0) {
-                // TODO filter for unsuspended and not exited processes and take first
-                Process = processes[0];
-                IntPtr handle = Kernel32.OpenProcess(ACCESS, false, processes[0].Id);
+                foreach (Process p in processes) {
+                    if (!p.HasExited && p.Responding) {
+                        Process = p;
+                        break;
+                    }
+                }
+
+                if (Process == null) throw new ProcessNotFoundException("Cannot open the process.",
+                    new ArgumentNullException("Process is null."));
+
+                IntPtr handle = Kernel32.OpenProcess(ACCESS, false, Process.Id);
 
                 if (handle == IntPtr.Zero) throw new ProcessNotFoundException("Cannot open the process.",
                     new InvalidOperationException("Cannot get Process handle."));
 
-                WaitHandle = new AutoResetEvent(false);
                 ProcessHandle = handle;
                 Breakpoints = new BreakpointCollection(this);
 
@@ -69,6 +77,7 @@ namespace DebugNET {
         }
         public Debugger(int processID) : this(Process.GetProcessById(processID)) { }
         public Debugger(Process process) {
+            WaitHandle = new AutoResetEvent(false);
             Process = process ?? throw new ProcessNotFoundException("Cannot find the process.",
                 new NullReferenceException("Process was null."));
 
@@ -77,7 +86,6 @@ namespace DebugNET {
             if (handle == IntPtr.Zero) throw new ProcessNotFoundException("Cannot open the process.",
                 new InvalidOperationException("Cannot get Process handle."));
 
-            WaitHandle = new AutoResetEvent(false);
             ProcessHandle = handle;
             Breakpoints = new BreakpointCollection(this);
         }
@@ -167,11 +175,11 @@ namespace DebugNET {
             }
 
             // Disable all breakpoints
-            SuspendProcess(Process);
+            Process.Suspend();
             foreach (var item in Breakpoints) {
                 if (item.Value.Enabled) item.Value.Disable(this, item.Key);
             }
-            ResumeProcess(Process);
+            Process.Resume();
 
             // Stop debugging
             if (Kernel32.DebugActiveProcessStop(Process.Id)) {
@@ -260,27 +268,7 @@ namespace DebugNET {
 
 
         public void Break() => doBreak = true;
-
-        public void SuspendProcess(Process process) {
-            foreach (ProcessThread thread in process.Threads) {
-                IntPtr handle = Kernel32.OpenThread(ThreadAccess.SUSPEND_RESUME, false, thread.Id);
-
-                if (handle == IntPtr.Zero) continue;
-
-                Kernel32.SuspendThread(handle);
-                Kernel32.CloseHandle(handle);
-            }
-        }
-        public void ResumeProcess(Process process) {
-            foreach (ProcessThread thread in process.Threads) {
-                IntPtr handle = Kernel32.OpenThread(ThreadAccess.SUSPEND_RESUME, false, thread.Id);
-
-                if (handle == IntPtr.Zero) continue;
-
-                Kernel32.ResumeThread(handle);
-                Kernel32.CloseHandle(handle);
-            }
-        }
+        
 
         public IntPtr AllocateMemory(int size = 4096) {
             return Kernel32.VirtualAllocEx(ProcessHandle, IntPtr.Zero, (uint)size, AllocationType.MEM_COMMIT | AllocationType.MEM_RESERVE, MemoryProtection.PAGE_EXECUTE_READWRITE);

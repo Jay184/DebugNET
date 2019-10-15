@@ -24,6 +24,9 @@ namespace DebugNETExample {
             // Start the process when not running.
             if (process == null) process = Process.Start($"{ name }.exe");
 
+            // Attaching too fast after starting results in an exception.
+            Thread.Sleep(100);
+
 
             try {
                 // Using statement to take care of disposing the debugger.
@@ -100,8 +103,8 @@ namespace DebugNETExample {
 
                             // Preferred way to create a breakpoint.
                             debugger.Breakpoints.Add(codeAddress,
-                            (sender, e) => Console.WriteLine(e.Context.Eax),
-                            e => e.Context.Eax < 200);
+                                (sender, e) => Console.WriteLine(e.Context.Eax),
+                                e => e.Context.Eax < 200);
 
                             // Stopping the debugger.
                             tokenSource.CancelAfter(3000);
@@ -125,6 +128,17 @@ namespace DebugNETExample {
                 // This way we can hardcode the process name and wrap many methods to simplify the whole thing.
                 using (var programDebugger = new DebugeeProgramDebugger()) {
                     programDebugger.OutputNumber += (sender, e) => Console.WriteLine(e);
+                    programDebugger.Listen();
+
+                    // Equals to:
+                    /*
+                    IntPtr address = programDebugger.Seek("DebugeeProgram.exe", 0x89, 0x45, 0xD0);
+                    programDebugger.Breakpoints.Add(address, (sender, eventArgs) => {
+                        Console.WriteLine(eventArgs.Context.Eax);
+                    });
+                    programDebugger.Listen();
+                    programDebugger.Breakpoints[address].Enable(programDebugger, address);
+                    */
 
                     // Do work here.
 
@@ -149,12 +163,15 @@ namespace DebugNETExample {
         public CancellationTokenSource TokenSource { get; private set; }
 
 
-        public DebugeeProgramDebugger() : base("DebugeeProgram") {
-            TokenSource = new CancellationTokenSource();
-            Listener = AttachAsync(TokenSource.Token);
+        public DebugeeProgramDebugger() : base("DebugeeProgram") {}
+
+
+        public void Listen() {
+            if (!IsAttached) {
+                TokenSource = new CancellationTokenSource();
+                Listener = AttachAsync(TokenSource.Token);
+            }
         }
-
-
         public void Detach() => TokenSource.Cancel();
         public void DetachAfter(int ms) => TokenSource.CancelAfter(ms);
 
