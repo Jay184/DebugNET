@@ -80,6 +80,10 @@
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
     </ClCompile>
+    <PostBuildEvent>
+      <Command>if not exist "$(SolutionDir)builds\" mkdir "$(SolutionDir)builds\"
+copy /Y "$(TargetDir)$(TargetFileName)" "$(SolutionDir)builds\$(TargetFileName)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>

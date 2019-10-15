@@ -28,16 +28,20 @@ namespace DebugNETExample {
             try {
                 // Using statement to take care of disposing the debugger.
                 using (Debugger debugger = new Debugger(process)) {
+
                     // Register events.
                     debugger.Attached += (sender, e) => Console.WriteLine($"Attached to { e.Process.ProcessName }!");
                     debugger.Detached += (sender, e) => Console.WriteLine($"Detached from { e.Process.ProcessName }!");
                     debugger.ProcessExited += (sender, e) => Console.WriteLine($"{ e.Process.ProcessName } exited!");
 
+
                     // Retrieve address by code.
                     IntPtr codeAddress = debugger.Seek($"{ name }.exe", 0x89, 0x45, 0xD0);
 
+
                     // Retrieve address by module-offset pair.
                     IntPtr address = debugger.GetAddress($"\"{ name }.exe\"+13648");
+
 
                     // Resolving pointers should be wrapped in a try catch block.
                     try {
@@ -46,15 +50,29 @@ namespace DebugNETExample {
                     } catch (ArgumentException) { // Provided an invalid pointer.
                     }
 
+
                     // Allocate memory in the process with rwx access.
                     IntPtr memory = debugger.AllocateMemory();
                     debugger.WriteByte(memory, 0xFF);
                     debugger.FreeMemory(memory);
 
-                    // Loading a library in the process.
-                    IntPtr handle = debugger.InjectLibrary("random.dll");
-                    uint shouldBe6 = debugger.ExecuteRemoteFunction("random.dll", handle, "seed", 5);
+
+                    // Loading a library into the process.
+                    IntPtr handle = debugger.InjectLibrary("inject.dll");
+                    IntPtr parameter = debugger.AllocateMemory();
+                    debugger.WriteUInt32(parameter, 22);
+                    debugger.WriteUInt32(parameter + 4, 20);
+
+
+                    // Executing remote functions. See inject project to see how the functions have to be defined for this to work.
+                    uint returnCode;
+                    returnCode = debugger.ExecuteRemoteFunction("inject.dll", handle, "echo", 12345678);
+                    returnCode = debugger.ExecuteRemoteFunction("inject.dll", handle, "fibonacci", 10);
+                    returnCode = debugger.ExecuteRemoteFunction("inject.dll", handle, "add", (uint)parameter);
+
+                    debugger.FreeMemory(parameter);
                     debugger.FreeRemoteLibrary(handle);
+
 
                     try {
                         /*
@@ -68,16 +86,14 @@ namespace DebugNETExample {
 
                         // Using statement around a CancellationTokenSource
                         using (CancellationTokenSource tokenSource = new CancellationTokenSource()) {
+
                             // Attaching to the process.
                             Task listener = debugger.AttachAsync(tokenSource.Token);
-                            
-                            // TODO lock bool until attached or not
-                            if (debugger.IsAttached) {
-                                // Preferred way to create a breakpoint.
-                                debugger.Breakpoints.Add(codeAddress,
-                                (sender, e) => Console.WriteLine(e.Context.Eax),
-                                e => e.Context.Eax < 200);
-                            }
+
+                            // Preferred way to create a breakpoint.
+                            debugger.Breakpoints.Add(codeAddress,
+                            (sender, e) => Console.WriteLine(e.Context.Eax),
+                            e => e.Context.Eax < 200);
 
                             // Stopping the debugger.
                             tokenSource.CancelAfter(2000);

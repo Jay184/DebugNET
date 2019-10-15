@@ -1,0 +1,11 @@
+LIBRARY INJECT
+DESCRIPTION "Demonstrating an injectable API."
+EXPORTS
+	echo	@1
+	fibonacci	@2
+	add @3
+
+; If you need help constructing this file, see here:
+; https://docs.microsoft.com/de-de/cpp/build/exporting-from-a-dll-using-def-files?view=vs-2019
+; https://docs.microsoft.com/de-de/cpp/build/exporting-functions-from-a-dll-by-ordinal-rather-than-by-name?view=vs-2019
+; Add this file in "Project Properties -> Configuration Properties -> Linker -> Input -> Module Definition File"

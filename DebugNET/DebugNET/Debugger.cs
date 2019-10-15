@@ -64,7 +64,7 @@ namespace DebugNET {
             } else throw new ProcessNotFoundException("Cannot find the process.",
                 new NullReferenceException("Process was null."));
         }
-        public Debugger(int processID) : this(Process.GetProcessById(processID)) {}
+        public Debugger(int processID) : this(Process.GetProcessById(processID)) { }
         public Debugger(Process process) {
             Process = process ?? throw new ProcessNotFoundException("Cannot find the process.",
                 new NullReferenceException("Process was null."));
@@ -319,18 +319,18 @@ namespace DebugNET {
             FreeMemory(memory);
             return remoteHandle;
         }
-        public uint ExecuteRemoteFunction(string libraryPath, IntPtr moduleHandle, string functionName, uint parameter = 0) {
-            //f300000+1100F
+        public uint ExecuteRemoteFunction(string libraryPath, IntPtr moduleHandle, string functionName, IntPtr parameter) => ExecuteRemoteFunctionAsync(libraryPath, moduleHandle, functionName, (uint)parameter).Result;
+        public uint ExecuteRemoteFunction(string libraryPath, IntPtr moduleHandle, string functionName, uint parameter = 0) => ExecuteRemoteFunctionAsync(libraryPath, moduleHandle, functionName, parameter).Result;
+        public async Task<uint> ExecuteRemoteFunctionAsync(string libraryPath, IntPtr moduleHandle, string functionName, IntPtr parameter) => await ExecuteRemoteFunctionAsync(libraryPath, moduleHandle, functionName, (uint)parameter);
+        public async Task<uint> ExecuteRemoteFunctionAsync(string libraryPath, IntPtr moduleHandle, string functionName, uint parameter = 0) {
             IntPtr localHandle = Kernel32.LoadLibrary(libraryPath);
             IntPtr localAddress = Kernel32.GetProcAddress(localHandle, functionName);
-            int x = Marshal.GetLastWin32Error();
-            Kernel32.FreeLibrary(localHandle); // TODO, this does not work with __stdcall functions
+            Kernel32.FreeLibrary(localHandle);
 
             int offset = (int)localAddress - (int)localHandle;
             IntPtr functionAddress = moduleHandle + offset;
 
-            uint returnCode = CreateThread(functionAddress, parameter);
-            return returnCode;
+            return await CreateThreadAsync(functionAddress, parameter);
         }
         public bool FreeRemoteLibrary(IntPtr moduleHandle) {
             IntPtr kernelHandle = Kernel32.GetModuleHandle("kernel32.dll");

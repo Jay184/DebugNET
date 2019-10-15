@@ -79,4 +79,9 @@
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <PostBuildEvent>if not exist "$(SolutionDir)builds\" mkdir "$(SolutionDir)builds\"
+copy /Y "$(TargetDir)$(TargetFileName)" "$(SolutionDir)builds\$(TargetFileName)"
+copy /Y "$(TargetDir)DebugNET.dll" "$(SolutionDir)builds\DebugNET.dll"</PostBuildEvent>
+  </PropertyGroup>
 </Project>
