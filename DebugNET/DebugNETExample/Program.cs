@@ -120,12 +120,51 @@ namespace DebugNETExample {
                     }
                 }
 
+
+                // We can also inherit from the debugger.
+                // This way we can hardcode the process name and wrap many methods to simplify the whole thing.
+                using (var programDebugger = new DebugeeProgramDebugger()) {
+                    programDebugger.OutputNumber += (sender, e) => Console.WriteLine(e);
+
+                    // Do work here.
+
+                    programDebugger.DetachAfter(2500);
+                    programDebugger.Listener.Wait();
+                }
+
+
                 Console.WriteLine("Done.");
                 Console.ReadKey();
             } catch (ProcessNotFoundException ex) {
                 Console.WriteLine($"Process cannot be found. { ex.InnerException.Message }");
                 Console.ReadKey();
             }
+        }
+    }
+
+    public class DebugeeProgramDebugger : Debugger {
+        public event EventHandler<int> OutputNumber;
+
+        public Task Listener { get; private set; }
+        public CancellationTokenSource TokenSource { get; private set; }
+
+
+        public DebugeeProgramDebugger() : base("DebugeeProgram") {
+            TokenSource = new CancellationTokenSource();
+            Listener = AttachAsync(TokenSource.Token);
+        }
+
+
+        public void Detach() => TokenSource.Cancel();
+        public void DetachAfter(int ms) => TokenSource.CancelAfter(ms);
+
+
+        protected override void OnAttached(AttachedEventArgs e) {
+            IntPtr address = Seek("DebugeeProgram.exe", 0x89, 0x45, 0xD0);
+
+            Breakpoints.Add(address, (sender, eventArgs) => {
+                OutputNumber?.Invoke(this, (int)eventArgs.Context.Eax);
+            });
         }
     }
 }

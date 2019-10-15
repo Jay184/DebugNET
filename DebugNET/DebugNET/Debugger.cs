@@ -46,6 +46,7 @@ namespace DebugNET {
         private bool isDisposed;
         private bool doBreak;
         private BreakpointEventArgs lastEvent;
+        protected CancellationToken CancellationToken { get; private set; }
 
 
 
@@ -59,6 +60,7 @@ namespace DebugNET {
                 if (handle == IntPtr.Zero) throw new ProcessNotFoundException("Cannot open the process.",
                     new InvalidOperationException("Cannot get Process handle."));
 
+                WaitHandle = new AutoResetEvent(false);
                 ProcessHandle = handle;
                 Breakpoints = new BreakpointCollection(this);
 
@@ -304,6 +306,7 @@ namespace DebugNET {
             Task<uint> thread = Task.Run(() => {
                 Kernel32.WaitForSingleObject(threadHandle, timeout);
                 Kernel32.GetExitCodeThread(threadHandle, out uint code);
+                Kernel32.CloseHandle(threadHandle);
                 return code;
             });
 
