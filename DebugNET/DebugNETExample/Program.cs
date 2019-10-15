@@ -70,7 +70,7 @@ namespace DebugNETExample {
                     Task<uint> addTask = debugger.ExecuteRemoteFunctionAsync("inject.dll", handle, "add", parameter);
 
                     // Tell the tasks what to do when they are done
-                    Action<Task<uint>> printTaskResult = t => Console.WriteLine(t.Result);
+                    Action<Task<uint>> printTaskResult = t => Console.WriteLine($"Function executed: { t.Result }");
                     echoTask.ContinueWith(printTaskResult);
                     fibonacciTask.ContinueWith(printTaskResult);
                     addTask.ContinueWith(printTaskResult);
@@ -80,7 +80,7 @@ namespace DebugNETExample {
                         debugger.FreeMemory(parameter);
                         debugger.FreeRemoteLibrary(handle);
                     });
-                    
+
 
                     try {
                         /*
@@ -104,7 +104,7 @@ namespace DebugNETExample {
                             e => e.Context.Eax < 200);
 
                             // Stopping the debugger.
-                            tokenSource.CancelAfter(2000);
+                            tokenSource.CancelAfter(3000);
                             listener.Wait();
                         }
                     } catch (AggregateException ex) {
