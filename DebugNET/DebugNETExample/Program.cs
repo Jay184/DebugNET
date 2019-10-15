@@ -51,6 +51,11 @@ namespace DebugNETExample {
                     debugger.WriteByte(memory, 0xFF);
                     debugger.FreeMemory(memory);
 
+                    // Loading a library in the process.
+                    IntPtr handle = debugger.InjectLibrary("random.dll");
+                    uint shouldBe6 = debugger.ExecuteRemoteFunction("random.dll", handle, "seed", 5);
+                    debugger.FreeRemoteLibrary(handle);
+
                     try {
                         /*
                         Listening can be wrapped in a DebugListener class with the following members:
@@ -65,16 +70,13 @@ namespace DebugNETExample {
                         using (CancellationTokenSource tokenSource = new CancellationTokenSource()) {
                             // Attaching to the process.
                             Task listener = debugger.AttachAsync(tokenSource.Token);
-
+                            
+                            // TODO lock bool until attached or not
                             if (debugger.IsAttached) {
                                 // Preferred way to create a breakpoint.
                                 debugger.Breakpoints.Add(codeAddress,
                                 (sender, e) => Console.WriteLine(e.Context.Eax),
                                 e => e.Context.Eax < 200);
-
-                                // Loading a library in the process.
-                                IntPtr handle = debugger.InjectLibrary("random.dll");
-                                debugger.FreeRemoteLibrary(handle);
                             }
 
                             // Stopping the debugger.

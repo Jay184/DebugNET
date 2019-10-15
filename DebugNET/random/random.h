@@ -6,6 +6,7 @@
 #define RANDOM_API __declspec(dllimport)
 #endif
 
-extern "C" RANDOM_API void seed(int seed);
-extern "C" RANDOM_API int seed_random();
-extern "C" RANDOM_API int random(int max);
+extern "C" RANDOM_API void __stdcall seed(void* parameter);
+extern "C" RANDOM_API int __stdcall seed_random(void* parameter);
+extern "C" RANDOM_API int __stdcall random(void* parameter);
+extern "C" RANDOM_API void __stdcall increment(void* parameter);

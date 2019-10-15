@@ -308,10 +308,9 @@ namespace DebugNET {
         }
 
 
-        delegate int random(int max);
-        public IntPtr InjectLibrary(string file) {
+        public IntPtr InjectLibrary(string libraryPath) {
             IntPtr memory = AllocateMemory();
-            WriteText(memory, file, Encoding.ASCII);
+            WriteText(memory, libraryPath, Encoding.ASCII);
 
             IntPtr kernelHandle = Kernel32.GetModuleHandle("kernel32.dll");
             IntPtr functionAddress = Kernel32.GetProcAddress(kernelHandle, "LoadLibraryA");
@@ -319,6 +318,19 @@ namespace DebugNET {
 
             FreeMemory(memory);
             return remoteHandle;
+        }
+        public uint ExecuteRemoteFunction(string libraryPath, IntPtr moduleHandle, string functionName, uint parameter = 0) {
+            //f300000+1100F
+            IntPtr localHandle = Kernel32.LoadLibrary(libraryPath);
+            IntPtr localAddress = Kernel32.GetProcAddress(localHandle, functionName);
+            int x = Marshal.GetLastWin32Error();
+            Kernel32.FreeLibrary(localHandle); // TODO, this does not work with __stdcall functions
+
+            int offset = (int)localAddress - (int)localHandle;
+            IntPtr functionAddress = moduleHandle + offset;
+
+            uint returnCode = CreateThread(functionAddress, parameter);
+            return returnCode;
         }
         public bool FreeRemoteLibrary(IntPtr moduleHandle) {
             IntPtr kernelHandle = Kernel32.GetModuleHandle("kernel32.dll");

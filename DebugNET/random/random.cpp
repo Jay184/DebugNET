@@ -6,15 +6,21 @@
 #include <iostream>
 #include <time.h>
 
-void seed(int seed) {
-	srand(seed);
+RANDOM_API void __stdcall seed(void * parameter) {
+	srand((unsigned int)parameter);
 }
-int seed_random() {
-	int seed = (int)time(0);
+RANDOM_API int __stdcall seed_random(void * parameter) {
+	unsigned int seed = (unsigned int)time(0);
 	srand(seed);
 	return seed;
 }
-int random(int max) {
-	int value = rand() % max;
+RANDOM_API int __stdcall random(void * parameter) {
+	int value = rand() % (unsigned int)parameter;
 	return value;
+}
+RANDOM_API void __stdcall increment(void * parameter) {
+	__asm {
+		inc ebx
+		mov eax, ebx
+	}
 }
