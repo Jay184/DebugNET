@@ -65,14 +65,22 @@ namespace DebugNETExample {
 
 
                     // Executing remote functions. See inject project to see how the functions have to be defined for this to work.
-                    uint returnCode;
-                    returnCode = debugger.ExecuteRemoteFunction("inject.dll", handle, "echo", 12345678);
-                    returnCode = debugger.ExecuteRemoteFunction("inject.dll", handle, "fibonacci", 10);
-                    returnCode = debugger.ExecuteRemoteFunction("inject.dll", handle, "add", (uint)parameter);
+                    Task<uint> echoTask = debugger.ExecuteRemoteFunctionAsync("inject.dll", handle, "echo", 12345678);
+                    Task<uint> fibonacciTask = debugger.ExecuteRemoteFunctionAsync("inject.dll", handle, "fibonacci", 10);
+                    Task<uint> addTask = debugger.ExecuteRemoteFunctionAsync("inject.dll", handle, "add", parameter);
 
-                    debugger.FreeMemory(parameter);
-                    debugger.FreeRemoteLibrary(handle);
+                    // Tell the tasks what to do when they are done
+                    Action<Task<uint>> printTaskResult = t => Console.WriteLine(t.Result);
+                    echoTask.ContinueWith(printTaskResult);
+                    fibonacciTask.ContinueWith(printTaskResult);
+                    addTask.ContinueWith(printTaskResult);
 
+                    // When all functions ran, release the library and the allocated memory
+                    Task.WhenAll(echoTask, fibonacciTask, addTask).ContinueWith(t => {
+                        debugger.FreeMemory(parameter);
+                        debugger.FreeRemoteLibrary(handle);
+                    });
+                    
 
                     try {
                         /*
