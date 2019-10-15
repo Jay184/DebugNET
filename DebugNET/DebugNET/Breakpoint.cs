@@ -23,6 +23,8 @@ namespace DebugNET {
         /// </summary>
         public bool Enable(Debugger debugger, IntPtr address) {
             if (Enabled) return false;
+            
+            debugger.WaitHandle.WaitOne(250);
             if (!debugger.IsAttached) throw new AttachException("The debugger is not attached. Setting this breakpoint could crash the program.");
 
             debugger.WriteByte(address, 0xCC);

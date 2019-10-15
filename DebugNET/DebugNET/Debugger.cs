@@ -40,6 +40,7 @@ namespace DebugNET {
         public BreakpointCollection Breakpoints { get; private set; }
         public Process Process { get; private set; }
         protected IntPtr ProcessHandle { get; private set; }
+        internal AutoResetEvent WaitHandle { get; private set; }
 
 
         private bool isDisposed;
@@ -74,6 +75,7 @@ namespace DebugNET {
             if (handle == IntPtr.Zero) throw new ProcessNotFoundException("Cannot open the process.",
                 new InvalidOperationException("Cannot get Process handle."));
 
+            WaitHandle = new AutoResetEvent(false);
             ProcessHandle = handle;
             Breakpoints = new BreakpointCollection(this);
         }
@@ -98,8 +100,7 @@ namespace DebugNET {
             bool hasChecked = Kernel32.CheckRemoteDebuggerPresent(ProcessHandle, ref isBeingDebugged);
 
             if (hasChecked && isBeingDebugged) throw new AttachException("Process already being debugged.");
-
-            await Task.Run(() => DebuggingLoop(token));
+            await Task.Run(() => DebuggingLoop(token)).ConfigureAwait(true);
         }
 
         private void DebuggingLoop(CancellationToken token) {
@@ -107,6 +108,7 @@ namespace DebugNET {
             if (Kernel32.DebugActiveProcess(Process.Id)) {
                 Kernel32.DebugSetProcessKillOnExit(false);
                 IsAttached = true;
+                WaitHandle.Set();
                 OnAttached(Process, ProcessHandle);
             }
 
@@ -153,6 +155,7 @@ namespace DebugNET {
             // Stop when process exited.
             if (Process.HasExited) {
                 IsAttached = false;
+                WaitHandle.Reset();
                 OnProcessExited(Process);
                 foreach (var item in Breakpoints) {
                     item.Value.Enabled = false;
@@ -171,6 +174,7 @@ namespace DebugNET {
             // Stop debugging
             if (Kernel32.DebugActiveProcessStop(Process.Id)) {
                 IsAttached = false;
+                WaitHandle.Reset();
                 OnDetached(Process);
             }
         }
