@@ -289,9 +289,10 @@ namespace DebugNET {
         public async Task<uint> CreateThreadAsync(IntPtr start, IntPtr parameter, uint timeout = Kernel32.UINFINITE) => await CreateThreadAsync(start, (uint)parameter, timeout);
         public async Task<uint> CreateThreadAsync(IntPtr start, uint parameter = 0, uint timeout = Kernel32.UINFINITE) {
             // Create thread in debuggee process
-            IntPtr threadHandle = Kernel32.CreateRemoteThread(ProcessHandle, IntPtr.Zero, 0, start, parameter, ThreadCreationFlags.None, out uint threadID);
+            IntPtr threadHandle = Kernel32.CreateRemoteThread(ProcessHandle, IntPtr.Zero, 0, start, parameter, ThreadCreationFlags.CREATE_SUSPENDED, out uint threadID);
 
             Task<uint> thread = Task.Run(() => {
+                Kernel32.ResumeThread(threadHandle);
                 Kernel32.WaitForSingleObject(threadHandle, timeout);
                 Kernel32.GetExitCodeThread(threadHandle, out uint code);
                 Kernel32.CloseHandle(threadHandle);

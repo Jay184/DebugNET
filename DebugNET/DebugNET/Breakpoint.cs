@@ -46,5 +46,8 @@ namespace DebugNET {
         internal protected virtual void OnHit(BreakpointEventArgs e) {
             Hit?.Invoke(this, e);
         }
+
+
+        public override string ToString() => Instruction.ToString("X2");
     }
 }

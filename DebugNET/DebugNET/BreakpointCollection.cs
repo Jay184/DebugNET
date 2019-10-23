@@ -1,15 +1,21 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 
 namespace DebugNET {
     public class BreakpointCollection : IEnumerable<KeyValuePair<IntPtr, Breakpoint>> {
+        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         public ICollection<IntPtr> Keys => Dictionary.Keys;
+        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         public ICollection<Breakpoint> Values => Dictionary.Values;
         public int Count => Dictionary.Count;
 
+        [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
         private Dictionary<IntPtr, Breakpoint> Dictionary { get; set; }
+
+        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private Debugger Debugger { get; set; }
 
 
