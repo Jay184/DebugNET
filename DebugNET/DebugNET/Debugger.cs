@@ -511,6 +511,16 @@ namespace DebugNET {
                 throw new AccessViolationException("Could not read memory");
             }
         }
+        public bool ReadBoolean(IntPtr address) {
+            byte[] buffer = new byte[1];
+            ReadMemory(address, buffer, buffer.Length);
+            return BitConverter.ToBoolean(buffer, 0);
+        }
+        public char ReadChar(IntPtr address) {
+            byte[] buffer = new byte[1];
+            ReadMemory(address, buffer, buffer.Length);
+            return BitConverter.ToChar(buffer, 0);
+        }
         public byte ReadByte(IntPtr address) {
             byte[] buffer = new byte[1];
             ReadMemory(address, buffer, buffer.Length);
@@ -609,6 +619,14 @@ namespace DebugNET {
             }
 
             Kernel32.FlushInstructionCache(ProcessHandle, address, (uint)size);
+        }
+        public void WriteBoolean(IntPtr address, bool value) {
+            byte[] buffer = BitConverter.GetBytes(value);
+            WriteMemory(address, buffer, buffer.Length);
+        }
+        public void WriteChar(IntPtr address, char value) {
+            byte[] buffer = BitConverter.GetBytes(value);
+            WriteMemory(address, buffer, buffer.Length);
         }
         public void WriteByte(IntPtr address, byte value) {
             byte[] buffer = new byte[] { value };
