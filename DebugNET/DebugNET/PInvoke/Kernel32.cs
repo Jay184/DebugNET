@@ -28,7 +28,7 @@ namespace DebugNET.PInvoke {
         /// <param name="dwThreadId">The identifier of the thread to be opened.</param>
         /// <returns>If the function succeeds, the return value is an open handle to the specified thread; otherwise, it is NULL.</returns>
         [DllImport("kernel32.dll", SetLastError = true)]
-        internal static extern IntPtr OpenThread(ThreadAccess dwDesiredAccess, bool bInheritHandle, int dwThreadId);
+        internal static extern IntPtr OpenThread(ThreadAccessFlags dwDesiredAccess, bool bInheritHandle, int dwThreadId);
 
         /// <summary>Closes an open object handle.</summary>
         /// <param name="hObject">A valid handle to an open object.</param>
@@ -39,6 +39,31 @@ namespace DebugNET.PInvoke {
         [return: MarshalAs(UnmanagedType.Bool)]
         internal static extern bool CloseHandle(IntPtr hObject);
 
+        /// <summary>Duplicates an object handle.</summary>
+        /// <param name="hSourceProcessHandle">A handle to the process with the handle to be duplicated. The handle must have the PROCESS_DUP_HANDLE access right.</param>
+        /// <param name="hSourceHandle">The handle to be duplicated. This is an open object handle that is valid in the context of the source process.</param>
+        /// <param name="hTargetProcessHandle">A handle to the process that is to receive the duplicated handle. The handle must have the PROCESS_DUP_HANDLE access right.</param>
+        /// <param name="lpTargetHandle">A pointer to a variable that receives the duplicate handle. This handle value is valid in the context of the target process. If hSourceHandle is a pseudo handle returned by GetCurrentProcess or GetCurrentThread, DuplicateHandle converts it to a real handle to a process or thread, respectively. If lpTargetHandle is NULL, the function duplicates the handle, but does not return the duplicate handle value to the caller. This behavior exists only for backward compatibility with previous versions of this function. You should not use this feature, as you will lose system resources until the target process terminates.</param>
+        /// <param name="dwDesiredAccess">The access requested for the new handle. For the flags that can be specified for each object type, see the following Remarks section. This parameter is ignored if the dwOptions parameter specifies the DUPLICATE_SAME_ACCESS flag. Otherwise, the flags that can be specified depend on the type of object whose handle is to be duplicated.</param>
+        /// <param name="bInheritHandle">A variable that indicates whether the handle is inheritable. If TRUE, the duplicate handle can be inherited by new processes created by the target process. If FALSE, the new handle cannot be inherited.</param>
+        /// <param name="dwOptions">Optional actions. This parameter can be zero, or any combination of the following values.</param>
+        /// <returns>If the function succeeds, the return value is nonzero; otherwise it is zero.</returns>
+        [DllImport("kernel32.dll", SetLastError=true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool DuplicateHandle(IntPtr hSourceProcessHandle, IntPtr hSourceHandle, IntPtr hTargetProcessHandle, out IntPtr lpTargetHandle, ProcessAccessFlags dwDesiredAccess, [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle, DuplicateOptions dwOptions);
+        
+        /// <summary>Duplicates an object handle.</summary>
+        /// <param name="hSourceProcessHandle">A handle to the process with the handle to be duplicated. The handle must have the PROCESS_DUP_HANDLE access right.</param>
+        /// <param name="hSourceHandle">The handle to be duplicated. This is an open object handle that is valid in the context of the source process.</param>
+        /// <param name="hTargetProcessHandle">A handle to the process that is to receive the duplicated handle. The handle must have the PROCESS_DUP_HANDLE access right.</param>
+        /// <param name="lpTargetHandle">A pointer to a variable that receives the duplicate handle. This handle value is valid in the context of the target process. If hSourceHandle is a pseudo handle returned by GetCurrentProcess or GetCurrentThread, DuplicateHandle converts it to a real handle to a process or thread, respectively. If lpTargetHandle is NULL, the function duplicates the handle, but does not return the duplicate handle value to the caller. This behavior exists only for backward compatibility with previous versions of this function. You should not use this feature, as you will lose system resources until the target process terminates.</param>
+        /// <param name="dwDesiredAccess">The access requested for the new handle. For the flags that can be specified for each object type, see the following Remarks section. This parameter is ignored if the dwOptions parameter specifies the DUPLICATE_SAME_ACCESS flag. Otherwise, the flags that can be specified depend on the type of object whose handle is to be duplicated.</param>
+        /// <param name="bInheritHandle">A variable that indicates whether the handle is inheritable. If TRUE, the duplicate handle can be inherited by new processes created by the target process. If FALSE, the new handle cannot be inherited.</param>
+        /// <param name="dwOptions">Optional actions. This parameter can be zero, or any combination of the following values.</param>
+        /// <returns>If the function succeeds, the return value is nonzero; otherwise it is zero.</returns>
+        [DllImport("kernel32.dll", SetLastError=true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool DuplicateHandle(IntPtr hSourceProcessHandle, IntPtr hSourceHandle, IntPtr hTargetProcessHandle, out IntPtr lpTargetHandle, ThreadAccessFlags dwDesiredAccess, [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle, DuplicateOptions dwOptions);
 
         /// <summary>Enables a debugger to attach to an active process and debug it.</summary>
         /// <param name="dwProcessId">The identifier for the process to be debugged. The debugger is granted debugging access to the process as if it created the process with the DEBUG_ONLY_THIS_PROCESS flag.</param>
@@ -59,7 +84,7 @@ namespace DebugNET.PInvoke {
         /// <param name="lpDebugEvent">A pointer to a DEBUG_EVENT structure that receives information about the debugging event.</param>
         /// <param name="dwMilliseconds">The number of milliseconds to wait for a debugging event. If this parameter is zero, the function tests for a debugging event and returns immediately. If the parameter is INFINITE, the function does not return until a debugging event has occurred.</param>
         /// <returns>If the function succeeds, the return value is nonzero; otherwise, it is zero.</returns>
-        [DllImport("kernel32.dll", EntryPoint = "WaitForDebugEvent")]
+        [DllImport("kernel32.dll", SetLastError = true, EntryPoint = "WaitForDebugEvent")]
         [return: MarshalAs(UnmanagedType.Bool)]
         internal static extern bool WaitForDebugEvent(ref DebugEvent lpDebugEvent, int dwMilliseconds);
 
@@ -67,7 +92,7 @@ namespace DebugNET.PInvoke {
         /// <param name="lpDebugEvent">A pointer to a DEBUG_EVENT structure that receives information about the debugging event.</param>
         /// <param name="dwMilliseconds">The number of milliseconds to wait for a debugging event. If this parameter is zero, the function tests for a debugging event and returns immediately. If the parameter is INFINITE, the function does not return until a debugging event has occurred.</param>
         /// <returns>If the function succeeds, the return value is nonzero; otherwise, it is zero.</returns>
-        [DllImport("kernel32.dll", EntryPoint = "WaitForDebugEventEx")]
+        [DllImport("kernel32.dll", SetLastError = true, EntryPoint = "WaitForDebugEventEx")]
         [return: MarshalAs(UnmanagedType.Bool)]
         internal static extern bool WaitForDebugEventEx(ref DebugEvent lpDebugEvent, int dwMilliseconds);
 

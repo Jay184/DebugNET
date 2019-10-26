@@ -21,9 +21,9 @@ namespace DebugNET {
                     ProcessAccessFlags.VM_READ |
                     ProcessAccessFlags.VM_WRITE |
                     ProcessAccessFlags.SYNCHRONIZE;
-        private const ThreadAccess THREADACCESS =
-                    ThreadAccess.GET_CONTEXT |
-                    ThreadAccess.SET_CONTEXT;
+        private const ThreadAccessFlags THREADACCESS =
+                    ThreadAccessFlags.GET_CONTEXT |
+                    ThreadAccessFlags.SET_CONTEXT;
         private const ContextFlags CONTEXTFLAGS =
                     ContextFlags.CONTEXT_CONTROL |
                     ContextFlags.CONTEXT_INTEGER;

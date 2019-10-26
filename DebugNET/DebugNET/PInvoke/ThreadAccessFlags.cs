@@ -2,7 +2,7 @@
 
 namespace DebugNET.PInvoke {
     [Flags]
-    internal enum ThreadAccess {
+    internal enum ThreadAccessFlags {
         TERMINATE = 0x01,
         SUSPEND_RESUME = 0x02,
         GET_CONTEXT = 0x08,

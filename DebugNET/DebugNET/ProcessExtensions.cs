@@ -4,7 +4,7 @@ namespace System.Diagnostics {
     public static class ProcessExtensions {
         public static void Suspend(this Process process) {
             foreach (ProcessThread thread in process.Threads) {
-                IntPtr handle = Kernel32.OpenThread(ThreadAccess.SUSPEND_RESUME, false, thread.Id);
+                IntPtr handle = Kernel32.OpenThread(ThreadAccessFlags.SUSPEND_RESUME, false, thread.Id);
 
                 if (handle == IntPtr.Zero) continue;
 
@@ -14,7 +14,7 @@ namespace System.Diagnostics {
         }
         public static void Resume(this Process process) {
             foreach (ProcessThread thread in process.Threads) {
-                IntPtr handle = Kernel32.OpenThread(ThreadAccess.SUSPEND_RESUME, false, thread.Id);
+                IntPtr handle = Kernel32.OpenThread(ThreadAccessFlags.SUSPEND_RESUME, false, thread.Id);
 
                 if (handle == IntPtr.Zero) continue;
 
