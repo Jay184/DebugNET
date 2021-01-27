@@ -14,11 +14,25 @@ namespace DebugNET.PInvoke {
         internal const uint UINFINITE = 0xFFFFFFFF;
 
 
+        /// <summary>The RtlZeroMemory routine fills a block of memory with zeros, given a pointer to the block and the length, in bytes, to be filled.</summary>
+        /// <param name="dest">A pointer to the memory block to be filled with zeros.</param>
+        /// <param name="length">The number of bytes to fill with zeros.</param>
+        [DllImport("Kernel32.dll", EntryPoint = "RtlZeroMemory", SetLastError = false)]
+        internal static extern void ZeroMemory(IntPtr dest, int length);
+
+        /// <summary>The RtlFillMemory routine fills a block of memory with the specified fill value.</summary>
+        /// <param name="dest">A pointer to the block of memory to be filled.</param>
+        /// <param name="length">The number of bytes in the block of memory to be filled.</param>
+        /// <param name="fill">The value to fill the destination memory block with. This value is copied to every byte in the memory block that is defined by Destination and Length.</param>
+        [DllImport("Kernel32.dll", EntryPoint = "RtlFillMemory", SetLastError = false)]
+        internal static extern void FillMemory(IntPtr dest, int length, int fill);
+
+
         /// <summary>Opens an existing local process object.</summary>
         /// <param name="dwDesiredAccess">The access to the process object.</param>
         /// <param name="bInheritHandle">If this value is TRUE, processes created by this process will inherit the handle. Otherwise, the processes do not inherit this handle.</param>
         /// <param name="dwProcessId">The identifier of the local process to be opened. If the specified process is NULL, the function fails and the last error code is ERROR_INVALID_PARAMETER.</param>
-        /// <returns>If the function succeeds, the return value is an open handle to the specified process; otherwise, it is NULL</returns>
+        /// <returns>If the function succeeds, the return value is an open handle to the specified process; otherwise, it is NULL.</returns>
         [DllImport("kernel32.dll", SetLastError = true)]
         internal static extern IntPtr OpenProcess(ProcessAccessFlags dwDesiredAccess, bool bInheritHandle, int dwProcessId);
 
