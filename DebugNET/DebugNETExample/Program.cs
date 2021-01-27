@@ -9,6 +9,10 @@ using Debugger = DebugNET.Debugger;
 
 namespace DebugNETExample {
     public static class Program {
+        struct Vector {
+            public int x, y;
+        }
+
         public const string name = "DebugeeProgram";
 
         /// <summary>
@@ -25,7 +29,7 @@ namespace DebugNETExample {
             if (process == null) process = Process.Start($"{ name }.exe");
 
             // Attaching too fast after starting results in an exception.
-            Thread.Sleep(100);
+            Thread.Sleep(1000);
 
 
             try {
@@ -72,8 +76,16 @@ namespace DebugNETExample {
                     Task<uint> fibonacciTask = debugger.ExecuteRemoteFunctionAsync("inject.dll", handle, "fibonacci", 10);
                     Task<uint> addTask = debugger.ExecuteRemoteFunctionAsync("inject.dll", handle, "add", parameter);
 
+                    IntPtr paramMemory = debugger.AllocateMemory();
+                    debugger.WriteStruct(paramMemory, new Vector() { x = 2, y = 3 });
+                    Task<uint> plus2Task = debugger.ExecuteRemoteFunctionAsync("inject.dll", handle, "plus2", paramMemory);
+                    plus2Task.ContinueWith(t => {
+                        Vector v = debugger.ReadStruct<Vector>((IntPtr)t.Result);
+                        Console.WriteLine(v.x + " -- " + v.y);
+                    });
+
                     // Tell the tasks what to do when they are done
-                    Action<Task<uint>> printTaskResult = t => Console.WriteLine($"Function executed: { t.Result }");
+                    void printTaskResult(Task<uint> t) => Console.WriteLine($"Function executed: { t.Result }");
                     echoTask.ContinueWith(printTaskResult);
                     fibonacciTask.ContinueWith(printTaskResult);
                     addTask.ContinueWith(printTaskResult);

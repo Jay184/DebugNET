@@ -3,6 +3,7 @@
 namespace DebugNET {
     public class Breakpoint {
         public event EventHandler<BreakpointEventArgs> Hit;
+        private const byte BreakPointInstruction = 0xCC;
 
 
         public Func<BreakpointEventArgs, bool> Condition { get; set; }
@@ -28,7 +29,7 @@ namespace DebugNET {
             
             //if (!debugger.IsAttached) throw new AttachException("The debugger is not attached. Setting this breakpoint could crash the program.");
 
-            debugger.WriteByte(address, 0xCC);
+            debugger.WriteByte(address, BreakPointInstruction);
             Enabled = true;
             return true;
         }
