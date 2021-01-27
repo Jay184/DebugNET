@@ -41,6 +41,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="PInvoke\DuplicateOptions.cs" />
     <Compile Include="ProcessExitedEventArgs.cs" />
     <Compile Include="DetachedEventArgs.cs" />
     <Compile Include="Breakpoint.cs" />
@@ -73,7 +74,7 @@
     <Compile Include="PInvoke\OutputDebugStringInfo.cs" />
     <Compile Include="PInvoke\ProcessAccessFlags.cs" />
     <Compile Include="PInvoke\RIPInfo.cs" />
-    <Compile Include="PInvoke\ThreadAccess.cs" />
+    <Compile Include="PInvoke\ThreadAccessFlags.cs" />
     <Compile Include="PInvoke\UnloadDLLDebugInfo.cs" />
     <Compile Include="PInvoke\XSaveFormat64.cs" />
     <Compile Include="AttachException.cs" />
