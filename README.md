@@ -142,7 +142,7 @@ Don't forget to give the project a star! Thanks again!
 1. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
 1. Run unit tests if possible
 1. Push to the branch (`git push origin feature/AmazingFeature`)
-1. Open a merge request
+1. Open a pull request
 
 ### Codestyle
 
