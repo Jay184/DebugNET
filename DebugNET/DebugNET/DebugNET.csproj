@@ -41,7 +41,21 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="PInvoke\DataSectionFlags.cs" />
     <Compile Include="PInvoke\DuplicateOptions.cs" />
+    <Compile Include="PInvoke\ImageDataDirectory.cs" />
+    <Compile Include="PInvoke\ImageDOSHeader.cs" />
+    <Compile Include="PInvoke\DLLCharacteristicsType.cs" />
+    <Compile Include="PInvoke\ImageNTHeaders64.cs" />
+    <Compile Include="PInvoke\ImageNTHeaders32.cs" />
+    <Compile Include="PInvoke\ImageFileHeader.cs" />
+    <Compile Include="PInvoke\ImageOptionalHeader64.cs" />
+    <Compile Include="PInvoke\ImageSectionHeader.cs" />
+    <Compile Include="PInvoke\SubSystemType.cs" />
+    <Compile Include="PInvoke\MagicType.cs" />
+    <Compile Include="PInvoke\MachineType.cs" />
+    <Compile Include="PInvoke\ImageFileCharacteristics.cs" />
+    <Compile Include="PInvoke\ImageOptionalHeader32.cs" />
     <Compile Include="ProcessExitedEventArgs.cs" />
     <Compile Include="DetachedEventArgs.cs" />
     <Compile Include="Breakpoint.cs" />

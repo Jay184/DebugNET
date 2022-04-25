@@ -9,6 +9,7 @@ namespace DebugNET.PInvoke {
         public IntPtr Record;
         public IntPtr Address;
         public uint NumberParameters;
-        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 15, ArraySubType = UnmanagedType.U4)] public uint[] Information;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 15, ArraySubType = UnmanagedType.U4)]
+        public uint[] Information;
     }
 }
